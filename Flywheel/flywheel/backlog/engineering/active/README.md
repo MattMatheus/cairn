@@ -4,7 +4,7 @@ Ordered execution queue for engineering implementation.
 
 ## Active Sequence
 
-1. `STORY-20260503-mcp-local-read-search-operations.md`
+No active engineering stories.
 
 ## Next Ready Candidates
 

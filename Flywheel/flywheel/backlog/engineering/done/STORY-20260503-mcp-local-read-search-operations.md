@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260503-mcp-local-read-search-operations
 - `owner_role`: Software Architect
-- `status`: active
+- `status`: done
 - `source`: pm
 - `decision_refs`: [ADR-mcp-operation-surface, ADR-indexing-query-boundary, ADR-document-model-lifecycle]
 - `success_metric`: Cairn has reusable local operation implementations for the read/search subset of the MCP surface without requiring MCP server transport.
@@ -69,3 +69,25 @@
 - `Completed work summary`: Added a bounded active story for local MCP read/search operations.
 - `Next suggested or required step`: Engineering should implement the local adapter package and tests.
 - `Next state recommendation`: engineering active
+
+## Engineering Handoff
+- `What changed`: Added `internal/mcpops` with transport-neutral local implementations for `get_bootstrap`, `search_context`, `list_documents`, `find_document`, and `index_status`, plus local metadata id lookup support.
+- `Why it matters`: The MCP schema surface now has reusable local operation functions behind it, while keeping MCP server transport and mutations out of scope.
+- `Acceptance criteria`: Covered search envelopes and degradation, list document summaries, find by id/slug/title/path/type/status/tag, local index status with remote-unavailable details, and compact bootstrap next steps.
+- `Validation`: `GOCACHE=/private/tmp/cairn-go-cache go test -count=1 ./...`; `bash Flywheel/flywheel/tools/validate_intake_items.sh`; `git diff --check`.
+- `Risks and assumptions`: `read_document`, lifecycle mutations, sync operations, and actual MCP transport remain follow-up work. `list_documents` currently supports the first tag filter from the schema.
+- `QA focus areas`: Verify local-only behavior, response envelopes, remote degradation details, and no transport/mutation behavior leaking into this slice.
+- `Completed work summary`: Implemented local MCP read/search operation adapter and tests.
+- `Next suggested or required step`: QA should review the adapter against the MCP and indexing ADRs, then move the story to done or file focused gaps.
+- `Next state recommendation`: engineering qa
+
+## QA Handoff
+- `Verdict`: Pass.
+- `Evidence summary`: The adapter implements the scoped local read/search operations without MCP transport or mutations, returns common-envelope responses, reuses local metadata/full-text search, reports local-only remote index degradation, and covers find/list/index/bootstrap behavior with tests.
+- `Evidence quality call`: Strong for this transport-neutral local adapter slice. Tests cover representative success responses, degraded/unavailable remote behavior, and envelope fields.
+- `Defects`: None filed.
+- `Required fixes`: None.
+- `Validation`: `GOCACHE=/private/tmp/cairn-go-cache go test -count=1 ./...`; `bash Flywheel/flywheel/tools/validate_intake_items.sh`; `git diff --check`.
+- `Completed work summary`: QA accepted the MCP local read/search operations story.
+- `Next suggested or required step`: Close the cycle with an observer report and commit, then run PM/planning for the next follow-up story.
+- `Next state recommendation`: engineering done

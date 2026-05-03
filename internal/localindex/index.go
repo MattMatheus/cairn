@@ -39,6 +39,7 @@ type SkippedFile struct {
 }
 
 type Query struct {
+	ID     string
 	Text   string
 	Slug   string
 	Tag    string
@@ -181,6 +182,10 @@ func (i *Index) Query(ctx context.Context, query Query) ([]mcpschema.SearchResul
 		where = append(where, "(title like ? or slug like ? or path like ?)")
 		like := "%" + query.Text + "%"
 		args = append(args, like, like, like)
+	}
+	if query.ID != "" {
+		where = append(where, "document_id = ?")
+		args = append(args, query.ID)
 	}
 	if query.Slug != "" {
 		where = append(where, "slug = ?")
