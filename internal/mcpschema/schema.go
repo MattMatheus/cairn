@@ -346,10 +346,25 @@ type SyncRequest struct {
 }
 
 type SyncStatusData struct {
-	LocalChanges  []string  `json:"local_changes,omitempty"`
-	RemoteChanges []string  `json:"remote_changes,omitempty"`
-	Diverged      bool      `json:"diverged"`
-	LastSyncAt    time.Time `json:"last_sync_at,omitempty"`
+	LocalChanges  []SyncChange   `json:"local_changes,omitempty"`
+	RemoteChanges []SyncChange   `json:"remote_changes,omitempty"`
+	Conflicts     []SyncConflict `json:"conflicts,omitempty"`
+	Diverged      bool           `json:"diverged"`
+	LastSyncAt    time.Time      `json:"last_sync_at,omitempty"`
+	BaseHash      string         `json:"base_hash,omitempty"`
+	RemoteHash    string         `json:"remote_hash,omitempty"`
+}
+
+type SyncChange struct {
+	Type         string `json:"type"`
+	Path         string `json:"path"`
+	PreviousPath string `json:"previous_path,omitempty"`
+	DocumentID   string `json:"document_id,omitempty"`
+}
+
+type SyncConflict struct {
+	Local  SyncChange `json:"local"`
+	Remote SyncChange `json:"remote"`
 }
 
 type SyncMutationData struct {

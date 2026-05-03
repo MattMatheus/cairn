@@ -47,6 +47,8 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, 
 		runErr = runSearch(ctx, rest[1:], opts, stdout)
 	case "index":
 		runErr = runIndex(ctx, rest[1:], opts, stdout)
+	case "sync":
+		runErr = runSync(ctx, rest[1:], opts, stdout)
 	case "help", "-h", "--help":
 		usage(stdout)
 	default:
@@ -353,5 +355,37 @@ func newFlagSet(name string) *flag.FlagSet {
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: cairn [--root DIR] <command> [options]")
-	fmt.Fprintln(w, "commands: init, capture, promote, archive, validate, search, index status")
+	fmt.Fprintln(w, "commands: init, capture, promote, archive, validate, search, index status, sync status")
+}
+
+func runSync(ctx context.Context, args []string, opts options, stdout io.Writer) error {
+	if len(args) == 0 || args[0] != "status" {
+		return fmt.Errorf("usage: cairn sync status")
+	}
+	local, err := mcpops.OpenLocal(opts.root)
+	if err != nil {
+		return err
+	}
+	defer local.Close()
+	envelope, err := local.SyncStatus(ctx, mcpschema.EmptyRequest{})
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "Sync diverged: %t\n", envelope.Data.Diverged)
+	fmt.Fprintf(stdout, "Local changes: %d\n", len(envelope.Data.LocalChanges))
+	for _, change := range envelope.Data.LocalChanges {
+		fmt.Fprintf(stdout, "- local %s %s\n", change.Type, change.Path)
+	}
+	fmt.Fprintf(stdout, "Remote changes: %d\n", len(envelope.Data.RemoteChanges))
+	for _, change := range envelope.Data.RemoteChanges {
+		fmt.Fprintf(stdout, "- remote %s %s\n", change.Type, change.Path)
+	}
+	for _, conflict := range envelope.Data.Conflicts {
+		fmt.Fprintf(stdout, "Conflict: local %s %s / remote %s %s\n", conflict.Local.Type, conflict.Local.Path, conflict.Remote.Type, conflict.Remote.Path)
+	}
+	printWarnings(stdout, envelope.Warnings)
+	for _, step := range envelope.NextSteps {
+		fmt.Fprintf(stdout, "Next: %s\n", step.Label)
+	}
+	return nil
 }
