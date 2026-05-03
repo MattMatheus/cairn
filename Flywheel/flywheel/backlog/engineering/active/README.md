@@ -3,12 +3,12 @@
 Ordered execution queue for engineering implementation.
 
 ## Active Sequence
-- No active engineering stories.
+
+1. `STORY-20260502-sync-manifest-state.md`
 
 ## Next Ready Candidates
 
-After the QA story passes, refine the remaining dependent stories in this order:
+After the active story passes QA, refine the remaining dependent stories in this order:
 
-1. `STORY-20260502-sync-manifest-state.md`
-2. `STORY-20260502-mcp-schema-surface.md`
-3. `STORY-20260502-local-index-query-foundation.md`
+1. `STORY-20260502-mcp-schema-surface.md`
+2. `STORY-20260502-local-index-query-foundation.md`

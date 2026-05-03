@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260502-sync-manifest-state
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: active
 - `source`: direct
 - `decision_refs`: [ADR-sync-conflict-behavior, ADR-document-model-lifecycle]
 - `success_metric`: Cairn can build and compare local sync manifests/state enough to detect creates, edits, moves, archives, deletes, and divergence before any remote write occurs.
@@ -28,7 +28,9 @@
 
 ## Assumptions
 - Document validation and metadata parsing are available from the document model story.
+- Capture, promotion, and archive operations are available from `STORY-20260502-capture-promotion-archive`.
 - Remote manifest loading can be represented by local fixtures in this story.
+- This story should create the smallest sync-focused package boundary needed for manifest/state comparison while reusing `internal/document` parsing and validation.
 
 ## Acceptance Criteria
 1. Cairn can generate a manifest for a fixture workspace while honoring `.cairnignore`.
@@ -53,7 +55,16 @@
 - Move detection without document ids may be ambiguous and should degrade conservatively.
 
 ## Open Questions
-- Should local sync state store the full base manifest or a compact normalized form?
+- Resolved for this slice: store the full normalized base manifest in local sync state for debuggability and deterministic comparison. A compact representation can be introduced later if size becomes a problem.
 
 ## Next Step
-- PM refinement should decide whether to split `.cairnignore` parsing if it is nontrivial in the chosen implementation stack.
+- Engineering should implement manifest generation, local sync state, and divergence comparison, then move the story to engineering QA.
+
+## PM Handoff
+- `What changed`: Promoted this story from engineering intake to engineering active after document validation and lifecycle operations passed QA.
+- `Why it matters`: It provides the local safety foundation for future Azure Blob `sync_pull` and `sync_push` without introducing remote mutation yet.
+- `Acceptance criteria`: Existing criteria remain valid and testable. Azure Blob API calls remain out of scope.
+- `Risks and assumptions`: Hashes should be the primary content-change signal. Move detection should use document id when available and degrade conservatively when ids are missing.
+- `Completed work summary`: Refined and activated the sync manifest and local state story.
+- `Next suggested or required step`: Engineering should implement local manifest/state/diff primitives and tests.
+- `Next state recommendation`: engineering active
