@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260503-mcp-read-document-progressive
 - `owner_role`: Software Architect
-- `status`: active
+- `status`: done
 - `source`: pm
 - `decision_refs`: [ADR-mcp-operation-surface, ADR-document-model-lifecycle]
 - `success_metric`: `read_document` has a local transport-neutral implementation for summary, frontmatter, table-of-contents, sections, and full modes.
@@ -66,3 +66,25 @@
 - `Completed work summary`: Added active `read_document` story and created the broader backlog behind it.
 - `Next suggested or required step`: Engineering should implement local progressive document reads.
 - `Next state recommendation`: engineering active
+
+## Engineering Handoff
+- `What changed`: Added local `ReadDocument` support in `internal/mcpops` with deterministic markdown body parsing, heading TOC extraction, section selection, summary excerpt, frontmatter response, and explicit full-content mode.
+- `Why it matters`: Agents can now progressively read managed markdown through the MCP operation layer without requiring server transport or rich semantic summaries.
+- `Acceptance criteria`: Covered path/slug/id resolution; `summary`, `frontmatter`, `toc`, `sections`, and `full` modes; missing-section warnings; provenance and next-step guidance for progressive/full reads.
+- `Validation`: `GOCACHE=/private/tmp/cairn-go-cache go test -count=1 ./...`; `bash Flywheel/flywheel/tools/validate_intake_items.sh`; `git diff --check`.
+- `Risks and assumptions`: Heading parsing is intentionally lightweight and deterministic. Summary mode is an excerpt, not a generated summary.
+- `QA focus areas`: Verify all read modes, missing-section warnings, id/slug/path resolution, and that no MCP transport or remote reads were introduced.
+- `Completed work summary`: Implemented progressive local `read_document` and tests.
+- `Next suggested or required step`: QA should review against `docs/adr/ADR-mcp-operation-surface.md`, then move the story to done or file focused bugs.
+- `Next state recommendation`: engineering qa
+
+## QA Handoff
+- `Verdict`: Pass.
+- `Evidence summary`: `ReadDocument` supports path, slug, and id resolution plus `summary`, `frontmatter`, `toc`, `sections`, and `full` modes. Missing requested sections produce warnings, full reads include next-step guidance, and the implementation remains local and transport-neutral.
+- `Evidence quality call`: Strong for this lightweight progressive-read slice. Tests cover all read modes and missing-section behavior.
+- `Defects`: None filed.
+- `Required fixes`: None.
+- `Validation`: `GOCACHE=/private/tmp/cairn-go-cache go test -count=1 ./...`; `bash Flywheel/flywheel/tools/validate_intake_items.sh`; `git diff --check`.
+- `Completed work summary`: QA accepted progressive local `read_document`.
+- `Next suggested or required step`: Close the cycle with an observer report and commit, then PM can promote the next backlog story.
+- `Next state recommendation`: engineering done
