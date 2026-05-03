@@ -1,0 +1,172 @@
+package workspace
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"cairn/internal/document"
+	"cairn/internal/localindex"
+	"cairn/internal/mcpschema"
+	"cairn/internal/syncstate"
+)
+
+func TestValidateReportsDocumentAndMetadataHealthFindings(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "notes/missing.md", "# Missing frontmatter\n")
+	writeFile(t, root, "notes/invalid.md", `---
+id: bad
+schema_version: 1
+title: Invalid
+slug: Invalid Slug
+type: mystery
+status: draft
+created: 2026-05-03T00:00:00Z
+updated: 2026-05-03T00:00:00Z
+authors: [foundry]
+actors: [codex]
+source: test
+tags: [test]
+---
+# Invalid
+`)
+
+	data, err := Validate(context.Background(), root, ValidateOptions{Mode: document.ValidationModeDiscovery})
+	if err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+	if !data.Healthy {
+		t.Fatalf("discovery validation should remain healthy with warnings: %#v", data.Findings)
+	}
+	assertFinding(t, data.Findings, "notes/missing.md", "", mcpschema.WarningValidation, "warning")
+	assertFinding(t, data.Findings, "notes/invalid.md", "", mcpschema.WarningValidation, "warning")
+	assertFinding(t, data.Findings, ".cairn/index/cairn.db", "", mcpschema.WarningIndexDegraded, "warning")
+	assertFinding(t, data.Findings, ".cairn/sync-state.json", "", mcpschema.WarningSyncDivergence, "warning")
+}
+
+func TestValidateUsesDurableBoundarySeverity(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "notes/missing.md", "# Missing frontmatter\n")
+
+	data, err := Validate(context.Background(), root, ValidateOptions{Mode: document.ValidationModeDurableBoundary})
+	if err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+	if data.Healthy {
+		t.Fatalf("durable validation should be unhealthy with blocking document findings")
+	}
+	assertFinding(t, data.Findings, "notes/missing.md", "", mcpschema.WarningValidation, "error")
+}
+
+func TestValidateSkipsIgnoredPaths(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, ".cairnignore", "ignored/\n")
+	writeFile(t, root, "ignored/bad.md", "# Ignored\n")
+	writeFile(t, root, "notes/good.md", validDoc("cairn:GoodDoc", "Good Doc", "good-doc"))
+	writeHealthyMetadata(t, root)
+
+	data, err := Validate(context.Background(), root, ValidateOptions{})
+	if err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+	if !data.Healthy {
+		t.Fatalf("expected healthy workspace, got findings: %#v", data.Findings)
+	}
+	if len(data.Findings) != 0 {
+		t.Fatalf("expected ignored invalid document to produce no findings, got %#v", data.Findings)
+	}
+}
+
+func TestValidateHealthyWorkspace(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "notes/good.md", validDoc("cairn:GoodDoc", "Good Doc", "good-doc"))
+	writeHealthyMetadata(t, root)
+
+	data, err := Validate(context.Background(), root, ValidateOptions{})
+	if err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+	if !data.Healthy {
+		t.Fatalf("expected healthy workspace, got findings: %#v", data.Findings)
+	}
+	if len(data.Findings) != 0 {
+		t.Fatalf("expected no findings, got %#v", data.Findings)
+	}
+}
+
+func TestValidateRejectsRequestedPathsOutsideWorkspace(t *testing.T) {
+	root := t.TempDir()
+	parent := filepath.Dir(root)
+	writeFile(t, parent, "outside.md", "# Outside\n")
+	writeHealthyMetadata(t, root)
+
+	data, err := Validate(context.Background(), root, ValidateOptions{Paths: []string{"../outside.md"}})
+	if err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+	if len(data.Findings) != 0 {
+		t.Fatalf("expected outside path to be skipped, got %#v", data.Findings)
+	}
+}
+
+func assertFinding(t *testing.T, findings []mcpschema.ValidationFinding, path string, docID string, code mcpschema.WarningCode, severity string) {
+	t.Helper()
+	for _, finding := range findings {
+		if finding.Path == path && finding.Code == code && finding.Severity == severity {
+			if docID == "" || finding.DocumentID == docID {
+				return
+			}
+		}
+	}
+	t.Fatalf("missing finding path=%q docID=%q code=%q severity=%q in %#v", path, docID, code, severity, findings)
+}
+
+func writeHealthyMetadata(t *testing.T, root string) {
+	t.Helper()
+	index, err := localindex.Open(root)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := index.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if err := syncstate.Save(root, syncstate.State{
+		LastRemoteManifestHash: "abc123",
+		LastSyncAt:             time.Date(2026, 5, 3, 12, 0, 0, 0, time.UTC),
+		Entries:                []syncstate.Entry{},
+	}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+}
+
+func writeFile(t *testing.T, root string, rel string, content string) {
+	t.Helper()
+	path := filepath.Join(root, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+}
+
+func validDoc(id string, title string, slug string) string {
+	return `---
+id: ` + id + `
+schema_version: 1
+title: ` + title + `
+slug: ` + slug + `
+type: note
+status: draft
+created: 2026-05-03T00:00:00Z
+updated: 2026-05-03T00:00:00Z
+authors: [foundry]
+actors: [codex]
+source: test
+tags: [test]
+---
+# ` + title + `
+`
+}

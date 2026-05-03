@@ -10,8 +10,6 @@ No active engineering stories.
 
 After the active story passes QA, continue through the intake backlog in this rough order:
 
-- MCP lifecycle mutation adapters
-- Workspace validation operation
 - Workspace init/config foundation
 - Local CLI command surface
 - Sync status/conflict reporting
