@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260502-capture-promotion-archive
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: active
 - `source`: direct
 - `decision_refs`: [ADR-document-model-lifecycle, ADR-mcp-operation-surface]
 - `success_metric`: Cairn can create, promote, and archive managed documents while preserving durable identity and lifecycle rules.
@@ -30,6 +30,8 @@
 ## Assumptions
 - Frontmatter parsing and validation are available from `STORY-20260502-document-frontmatter-validation`.
 - ADR number allocation can start with local deterministic behavior and later be guarded by sync conflict handling.
+- This story should extend the existing `internal/document` package or add the smallest adjacent package needed for filesystem lifecycle operations.
+- MCP and CLI adapters should remain out of scope; expose reusable operation functions that later adapters can call.
 
 ## Acceptance Criteria
 1. Capture creates a managed markdown document with valid core frontmatter.
@@ -54,7 +56,16 @@
 - Promotion moves can surprise users if paths are not reported clearly.
 
 ## Open Questions
-- Should CLI-only purge be a separate v1 story or deferred until after archive is working?
+- Resolved for this slice: CLI-only purge is deferred until after archive is working and should be created as a separate story when needed.
 
 ## Next Step
-- PM refinement should keep this behind the validation core story.
+- Engineering should implement capture, promotion, ADR numbering, and archive lifecycle operations, then move the story to engineering QA.
+
+## PM Handoff
+- `What changed`: Promoted this story from engineering intake to engineering active as the next dependency after frontmatter validation.
+- `Why it matters`: It turns the accepted document lifecycle ADR into reusable product operations for later CLI and MCP adapters.
+- `Acceptance criteria`: Existing criteria remain valid and testable. Purge remains out of scope.
+- `Risks and assumptions`: ADR number allocation may be local-only in this slice and later protected by sync conflict behavior. File moves should report paths clearly in operation results.
+- `Completed work summary`: Refined and activated the capture, promotion, and archive lifecycle story.
+- `Next suggested or required step`: Engineering should implement reusable lifecycle operations on top of `internal/document`.
+- `Next state recommendation`: engineering active
