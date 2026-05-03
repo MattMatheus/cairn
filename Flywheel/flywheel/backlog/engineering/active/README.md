@@ -4,12 +4,17 @@ Ordered execution queue for engineering implementation.
 
 ## Active Sequence
 
-No active engineering stories.
+1. `STORY-20260503-mcp-read-document-progressive.md`
 
 ## Next Ready Candidates
 
-After the active story passes QA, refine follow-up stories for:
+After the active story passes QA, continue through the intake backlog in this rough order:
 
-- `read_document` progressive disclosure
-- lifecycle mutation MCP operations
-- sync status/pull/push operations
+- MCP lifecycle mutation adapters
+- Workspace validation operation
+- Workspace init/config foundation
+- Local CLI command surface
+- Sync status/conflict reporting
+- Azure Blob remote sync adapter
+- Read-only MCP server transport
+- CocoIndex contract prototype
