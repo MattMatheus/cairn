@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260503-workspace-init-config
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: done
 - `source`: pm
 - `decision_refs`: [ADR-document-model-lifecycle, ADR-sync-conflict-behavior, ADR-indexing-query-boundary]
 - `success_metric`: Cairn can initialize the standard workspace layout and local config files non-interactively.
@@ -49,7 +49,31 @@
 - Avoid overfitting config before sync/profile behavior lands.
 
 ## Open Questions
-- Exact minimal config fields.
+- Resolved for v1: config starts with schema version, workspace id, managed folders, document type destinations, local profile, and pod-remote placeholders with no secrets.
 
 ## Next Step
-- PM should refine after current MCP adapter slices.
+- Engineering should implement idempotent non-interactive workspace init.
+
+## PM Handoff
+- Promoted on 2026-05-03 after workspace validation completed.
+- Keep init non-interactive and conservative; no credential setup or rich onboarding generation.
+- Make created files useful as pointers while avoiding overwrites of existing human-authored content.
+
+## Engineering Handoff
+- Implemented `internal/workspace.Init` with idempotent creation of the north-star folder layout.
+- Added minimal generated `.cairn/config.yaml`, `.cairnignore`, schema README, onboarding files, `AGENTS.md`, and `CLAUDE.md`.
+- Existing files are never overwritten; conflicting directory/file paths return an error.
+- Verification:
+  - `GOCACHE=/private/tmp/cairn-go-cache go test ./internal/workspace`
+  - `GOCACHE=/private/tmp/cairn-go-cache go test ./...`
+
+## QA Handoff
+- Accepted on 2026-05-03.
+- Confirmed init creates the north-star layout, control files, starter onboarding, agent pointers, and schema starter content.
+- Confirmed existing files are not overwritten and repeated init is idempotent.
+- QA polish applied before acceptance: added `.cairn/schemas/core.yaml` to satisfy starter schema intent and replaced custom key sorting with `sort.Strings`.
+- Verification:
+  - `GOCACHE=/private/tmp/cairn-go-cache go test ./...`
+
+## Next Suggested Step
+- Promote the local CLI command surface story so init and validation can be invoked from user-facing commands.
