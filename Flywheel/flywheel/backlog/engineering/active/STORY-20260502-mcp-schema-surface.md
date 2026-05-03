@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260502-mcp-schema-surface
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: active
 - `source`: direct
 - `decision_refs`: [ADR-mcp-operation-surface, ADR-document-model-lifecycle, ADR-sync-conflict-behavior, ADR-indexing-query-boundary]
 - `success_metric`: The v1 MCP tool surface has concrete request and response schemas with shared warnings, provenance, and next-step reporting.
@@ -53,7 +53,16 @@
 - Under-specified schemas may allow unsafe agent behavior.
 
 ## Open Questions
-- Should schemas live in code, generated docs, or both?
+- Resolved for this slice: schemas should live in code with golden examples or validation tests. Generated docs can come later once the server surface stabilizes.
 
 ## Next Step
-- PM refinement should decide whether this runs before or alongside lifecycle operation implementation.
+- Engineering should define the isolated v1 MCP schema surface and representative validation examples before server transport wiring.
+
+## PM Handoff
+- `What changed`: Promoted the MCP schema surface story from intake to engineering active.
+- `Why it matters`: Lifecycle and sync primitives now exist, so a stable schema surface can give future MCP server wiring a safer contract for warnings, provenance, unavailable modes, and next-step reporting.
+- `Acceptance criteria`: Existing criteria remain valid and testable. This story should produce code-level schemas plus golden examples or validation tests, not full MCP transport.
+- `Risks and assumptions`: Keep schemas narrow enough to avoid premature transport or operation implementation. Preserve the ADR boundary that purge/hard delete is absent from MCP.
+- `Completed work summary`: Resolved the schema-location question for this slice and activated the story.
+- `Next suggested or required step`: Engineering should implement isolated request/response schema definitions and tests against `docs/adr/ADR-mcp-operation-surface.md`.
+- `Next state recommendation`: engineering active
