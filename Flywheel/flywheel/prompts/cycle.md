@@ -24,6 +24,8 @@ Drain the configured engineering active queue by alternating engineering and QA 
 - completed cycle artifacts for each processed story
 - observer report for each closed cycle
 - one commit per completed cycle
+- completed work summary
+- next suggested or required step
 
 ## Constraints
 - do not bypass backlog states

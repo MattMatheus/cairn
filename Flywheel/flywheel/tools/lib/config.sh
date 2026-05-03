@@ -8,7 +8,26 @@ flywheel_repo_root() {
 }
 
 flywheel_config_file() {
-  printf '%s/flywheel.yaml' "$(flywheel_repo_root)"
+  local root
+  root="$(flywheel_repo_root)"
+
+  if [[ -f "$root/flywheel.yaml" ]]; then
+    printf '%s/flywheel.yaml' "$root"
+    return
+  fi
+
+  if [[ -f "$root/Flywheel/flywheel.yaml" ]]; then
+    printf '%s/Flywheel/flywheel.yaml' "$root"
+    return
+  fi
+
+  printf '%s/flywheel.yaml' "$root"
+}
+
+flywheel_config_root() {
+  local config_file
+  config_file="$(flywheel_config_file)"
+  cd "$(dirname "$config_file")" && pwd
 }
 
 flywheel_config_get() {
@@ -55,7 +74,7 @@ flywheel_config_get_optional() {
 flywheel_path() {
   local key="$1"
   local root value
-  root="$(flywheel_repo_root)"
+  root="$(flywheel_config_root)"
   value="$(flywheel_config_get "$key")"
   printf '%s/%s' "$root" "$value"
 }

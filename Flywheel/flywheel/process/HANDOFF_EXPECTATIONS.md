@@ -7,7 +7,9 @@ Each stage handoff should contain:
 - open risks
 - assumptions carried forward
 - action or approval notes when risky work occurred
+- completed work summary
 - next-state recommendation
+- next suggested or required step
 
 Handoffs should be concise and sufficient for the next stage to proceed without rediscovering context.
 

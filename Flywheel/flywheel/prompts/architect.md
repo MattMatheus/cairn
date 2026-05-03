@@ -31,7 +31,9 @@ Execute the top architecture story from the configured architecture active lane.
 - risks and mitigations
 - operational impact
 - follow-on implementation artifact paths
+- completed work summary
 - next-state recommendation
+- next suggested or required step
 
 ## Constraints
 - do not replace implementation with architecture discussion

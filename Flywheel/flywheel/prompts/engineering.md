@@ -34,6 +34,8 @@ Execute the top engineering story from the configured engineering active lane.
 - explicit QA focus areas
 - action and approval notes when risky work occurred
 - new intake items for discovered gaps, when required
+- completed work summary
+- next suggested or required step
 
 ## Constraints
 - do not fabricate work when the active queue is empty

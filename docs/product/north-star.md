@@ -122,6 +122,8 @@ Inline `#tags` are ignored by Cairn. Tags are normalized through frontmatter arr
 
 Unknown frontmatter fields should produce validation warnings, not failures.
 
+Cairn should be permissive when discovering markdown and strict when turning content into durable team knowledge. `capture` and `promote` may add or repair missing core frontmatter. `validate` should warn for ordinary managed documents with missing or invalid frontmatter, but promotion to `canonical`, document sync, and indexing should require valid core frontmatter unless the file is explicitly ignored. This keeps plain markdown portable while making canonical and remote-visible knowledge reliable.
+
 ## Status Model
 
 Built-in statuses:
@@ -182,7 +184,7 @@ Workspace config maps document types to destination folders.
 
 Decision documents use ADR-style numbering.
 
-ADR numbers are assigned when a decision is promoted/completed, not when a draft idea is first created. Promotion moves the document to:
+ADR numbers are assigned only when a `decision` document becomes `canonical`, not when a draft idea is first created or when a decision is merely `proposed`. Promotion to canonical moves the document to:
 
 ```text
 /decisions/ADR-000N-slug.md
@@ -219,12 +221,14 @@ Promotion should:
 
 - ask for or receive a document type
 - validate or add required frontmatter
-- update status
-- assign ADR number when applicable
+- update status, usually to `proposed` or `canonical`
+- assign ADR number only when a `decision` becomes `canonical`
 - move the document to the configured destination folder when required
 - preserve durable metadata such as id, authors, actors, source, tags, and timestamps
 
 Promotion transforms the existing document. It should not clutter the workspace with separate original-versus-promoted copies.
+
+Promotion to `proposed` is review staging. Promotion to `canonical` is durable team knowledge. For decisions, canonical promotion is the completion point that assigns the ADR number and final filename.
 
 ## Archive And Purge
 
@@ -275,8 +279,9 @@ Sync metadata:
 - local sync state lives in `/.cairn/sync-state.json`
 - remote manifest lives in Blob at `/.cairn/remote-manifest.json`
 - the manifest records path, size, hash, modified time, and document id when available
+- the last accepted remote manifest is the base used to detect local and remote divergence
 
-If local and remote both changed since the last known base, Cairn warns and refuses rather than trying to merge.
+Sync treats file content changes, creates, moves, archives, and deletes as manifest changes. Moves and archives should preserve document id when frontmatter is available. If local and remote both changed since the last known base, Cairn warns and refuses the operation rather than trying to merge. A refused sync must not update local sync state, overwrite local files, overwrite remote files, or publish a new remote manifest. The user should resolve by pulling, archiving, renaming, or otherwise reconciling files and then retrying.
 
 Archive and move operations are exposed through MCP. Purge/delete is CLI-only.
 
@@ -291,6 +296,8 @@ az account get-access-token
 ```
 
 to obtain bearer tokens. This aligns with existing Azure DevOps skill usage and avoids requiring VPN-only access patterns.
+
+The same Azure CLI identity should be the default credential source for Azure Blob sync and for remote indexer calls when the `pod-remote` profile is active. The remote indexer should validate that identity through Azure-managed auth or an equivalent bearer-token flow. Cairn should not introduce a separate secret-bearing credential path in v1.
 
 No secrets should be stored in `.cairn/config.yaml`.
 
@@ -332,7 +339,7 @@ Cairn maintains a lightweight local SQLite metadata index at:
 
 for fast title, slug, tag, status, type, path, actor, source, and recent-change lookups.
 
-CocoIndex owns richer derived index artifacts through its pipelines. Cairn should define stable query contracts rather than depending on every artifact format directly.
+Cairn owns document discovery, frontmatter parsing, validation state, local metadata lookup, local full-text lookup, and the MCP/CLI query contract. CocoIndex owns richer derived index artifacts through its pipelines, including semantic embeddings, richer summaries, entity extraction, graph features, and incremental processing beyond Cairn's lightweight metadata index. Cairn should define stable query contracts rather than depending on every artifact format directly.
 
 The remote indexer should expose HTTP endpoints such as:
 
@@ -468,7 +475,7 @@ warning
 info
 ```
 
-Capture and promotion may auto-add missing frontmatter. Validation should warn on missing or invalid frontmatter because that usually means content bypassed Cairn.
+Capture and promotion may auto-add missing frontmatter. Validation should warn on missing or invalid frontmatter because that usually means content bypassed Cairn. Operations that publish or depend on durable document identity, including canonical promotion, sync, and indexing, should block until core frontmatter is valid.
 
 Validation checks should include:
 
@@ -512,6 +519,21 @@ V1 constraints:
 
 Future privacy work may integrate a pre-index or pre-promotion filter similar in spirit to OpenAI Privacy Filter so sensitive data can be kept out of the store when possible.
 
+Privacy filtering, retention policy, and other v2 safeguards should not add mandatory complexity to the v1 lifecycle. V1 architecture should leave clear extension points, but should not block capture, promotion, sync, or indexing work on those future controls.
+
+Git compatibility is limited to light nudging in v1, such as respecting normal markdown portability and avoiding surprising file churn. Git is not the main backend for Cairn.
+
+## ADR Preparation
+
+ADRs should be subsystem-sized, not a single product mega-ADR.
+
+The first ADR batch should cover:
+
+- document model and lifecycle
+- sync and conflict behavior
+- MCP operation surface
+- indexing boundary and query contract
+
 ## Explicit Non-Goals For V1
 
 - Markdown editor UI.
@@ -531,9 +553,7 @@ Future privacy work may integrate a pre-index or pre-promotion filter similar in
 
 - Exact CocoIndex pipeline contracts and artifact formats.
 - Local indexer packaging details.
-- ACA indexer deployment and auth details.
+- ACA indexer deployment details and exact auth enforcement mechanism.
 - Azure Blob manifest schema.
 - YAML schema format for built-in and custom document types.
 - Initial command and MCP API schemas.
-- How much Git compatibility or nudging should Cairn provide.
-- When privacy filtering enters the lifecycle: capture, promotion, sync, or index.
