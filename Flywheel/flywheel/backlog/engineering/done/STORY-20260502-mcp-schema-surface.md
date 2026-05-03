@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260502-mcp-schema-surface
 - `owner_role`: Software Architect
-- `status`: active
+- `status`: done
 - `source`: direct
 - `decision_refs`: [ADR-mcp-operation-surface, ADR-document-model-lifecycle, ADR-sync-conflict-behavior, ADR-indexing-query-boundary]
 - `success_metric`: The v1 MCP tool surface has concrete request and response schemas with shared warnings, provenance, and next-step reporting.
@@ -66,3 +66,25 @@
 - `Completed work summary`: Resolved the schema-location question for this slice and activated the story.
 - `Next suggested or required step`: Engineering should implement isolated request/response schema definitions and tests against `docs/adr/ADR-mcp-operation-surface.md`.
 - `Next state recommendation`: engineering active
+
+## Engineering Handoff
+- `What changed`: Added `internal/mcpschema` with typed v1 MCP tool names, mutability classes, profiles, read/search modes, common response envelope, warning/unavailable/error/provenance shapes, request/response payloads, mutation result shapes, and an explicit tool-to-schema registry.
+- `Why it matters`: Future MCP transport wiring can bind to a concrete contract that preserves next-step reporting, graceful degradation, provenance, and lifecycle/sync/index boundaries.
+- `Acceptance criteria`: Covered every v1 MCP tool from the ADR, shared response envelope, actor/profile fields, progressive read/search modes, validation/sync/index warning shapes, mutation changed paths and durable ids, and the no hard-delete/purge boundary.
+- `Validation`: `GOCACHE=/private/tmp/cairn-go-cache go test -count=1 ./...`; `bash Flywheel/flywheel/tools/validate_intake_items.sh`; `git diff --check`.
+- `Risks and assumptions`: These are Go code-level schemas rather than generated JSON Schema documents. Generated docs can be added later once the server transport exists.
+- `QA focus areas`: Verify the v1 tool list against `docs/adr/ADR-mcp-operation-surface.md`; confirm all responses use `Envelope`; confirm mutation responses expose changed paths and document ids where applicable; confirm purge/delete is absent.
+- `Completed work summary`: Implemented isolated MCP schema definitions and schema coverage tests.
+- `Next suggested or required step`: QA should review schema completeness against the accepted MCP ADR and either move the story to done or file focused schema gaps.
+- `Next state recommendation`: engineering qa
+
+## QA Handoff
+- `Verdict`: Pass.
+- `Evidence summary`: The schema package covers all fourteen v1 MCP tools in `docs/adr/ADR-mcp-operation-surface.md`, maps each tool to concrete request/response schema names, uses the shared `Envelope` response shape, includes warning/unavailable/next-step/provenance fields, covers actor/profile and progressive read/search modes, and excludes hard delete/purge.
+- `Evidence quality call`: Strong for this schema-only slice. Tests validate representative payloads and key ADR boundaries without requiring MCP transport implementation.
+- `Defects`: None filed.
+- `Required fixes`: None.
+- `Validation`: `GOCACHE=/private/tmp/cairn-go-cache go test -count=1 ./...`; `bash Flywheel/flywheel/tools/validate_intake_items.sh`; `git diff --check`.
+- `Completed work summary`: QA accepted the MCP schema surface story.
+- `Next suggested or required step`: Close the cycle with an observer report and commit, then return to PM for local index/query story refinement.
+- `Next state recommendation`: engineering done
