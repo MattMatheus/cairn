@@ -161,6 +161,7 @@ profiles:
   pod-remote:
     enabled: false
     provider: azure_blob
+    account: ""
     container: ""
     prefix: ""
 required_skills: []

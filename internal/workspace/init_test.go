@@ -42,6 +42,7 @@ func TestInitCreatesStandardWorkspaceLayout(t *testing.T) {
 		"managed_folders:",
 		"document_types:",
 		"pod-remote:",
+		"account: \"\"",
 	} {
 		if !strings.Contains(config, expected) {
 			t.Fatalf("config missing %q:\n%s", expected, config)
