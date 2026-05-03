@@ -3,12 +3,11 @@
 Ordered execution queue for engineering implementation.
 
 ## Active Sequence
-
-1. `STORY-20260502-capture-promotion-archive.md`
+- No active engineering stories.
 
 ## Next Ready Candidates
 
-After the active story passes QA, refine the remaining dependent stories in this order:
+After the QA story passes, refine the remaining dependent stories in this order:
 
 1. `STORY-20260502-sync-manifest-state.md`
 2. `STORY-20260502-mcp-schema-surface.md`
