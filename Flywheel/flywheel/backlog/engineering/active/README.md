@@ -4,7 +4,7 @@ Ordered execution queue for engineering implementation.
 
 ## Active Sequence
 
-1. `STORY-20260502-sync-manifest-state.md`
+No active engineering stories.
 
 ## Next Ready Candidates
 
