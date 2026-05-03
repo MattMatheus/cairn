@@ -13,6 +13,7 @@ import (
 	"cairn/internal/localindex"
 	"cairn/internal/mcpops"
 	"cairn/internal/mcpschema"
+	"cairn/internal/mcpserver"
 	"cairn/internal/workspace"
 )
 
@@ -49,6 +50,8 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, 
 		runErr = runIndex(ctx, rest[1:], opts, stdout)
 	case "sync":
 		runErr = runSync(ctx, rest[1:], opts, stdout)
+	case "mcp":
+		runErr = runMCP(ctx, rest[1:], opts, stdin, stdout)
 	case "help", "-h", "--help":
 		usage(stdout)
 	default:
@@ -355,7 +358,19 @@ func newFlagSet(name string) *flag.FlagSet {
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: cairn [--root DIR] <command> [options]")
-	fmt.Fprintln(w, "commands: init, capture, promote, archive, validate, search, index status, sync status")
+	fmt.Fprintln(w, "commands: init, capture, promote, archive, validate, search, index status, sync status, mcp readonly")
+}
+
+func runMCP(ctx context.Context, args []string, opts options, stdin io.Reader, stdout io.Writer) error {
+	if len(args) == 0 || args[0] != "readonly" {
+		return fmt.Errorf("usage: cairn mcp readonly")
+	}
+	local, err := mcpops.OpenLocal(opts.root)
+	if err != nil {
+		return err
+	}
+	defer local.Close()
+	return mcpserver.New(local).Serve(ctx, stdin, stdout)
 }
 
 func runSync(ctx context.Context, args []string, opts options, stdout io.Writer) error {

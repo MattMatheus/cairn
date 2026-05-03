@@ -119,6 +119,21 @@ func TestRunUnknownCommand(t *testing.T) {
 	}
 }
 
+func TestRunMCPReadonlyServesJSONRPC(t *testing.T) {
+	root := t.TempDir()
+	input := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}` + "\n"
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run(context.Background(), []string{"--root", root, "mcp", "readonly"}, strings.NewReader(input), &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("mcp readonly code=%d stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "read_document") {
+		t.Fatalf("unexpected mcp output:\n%s", stdout.String())
+	}
+}
+
 func runOK(t *testing.T, args ...string) string {
 	t.Helper()
 	stdout, stderr, code := run(t, args...)
