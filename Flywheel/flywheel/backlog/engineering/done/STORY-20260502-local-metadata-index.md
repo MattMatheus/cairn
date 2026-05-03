@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260502-local-metadata-index
 - `owner_role`: Software Architect
-- `status`: active
+- `status`: done
 - `source`: pm
 - `decision_refs`: [ADR-indexing-query-boundary, ADR-document-model-lifecycle, ADR-mcp-operation-surface]
 - `success_metric`: Cairn can create a local metadata index at `/.cairn/index/cairn.db`, populate it from managed markdown, and query stable result shapes without requiring CocoIndex.
@@ -70,3 +70,25 @@
 - `Completed work summary`: Created a bounded active story for local metadata indexing.
 - `Next suggested or required step`: Engineering should implement local metadata index creation/population/query behavior with tests.
 - `Next state recommendation`: engineering active
+
+## Engineering Handoff
+- `What changed`: Added `internal/localindex` with a pure-Go SQLite-backed metadata index at `/.cairn/index/cairn.db`, workspace indexing for managed markdown, durable-boundary metadata validation, skip reporting for invalid/unmanaged markdown, and metadata query filters.
+- `Why it matters`: Cairn now has a local metadata lookup foundation that does not require CocoIndex and can feed future CLI/MCP search wiring.
+- `Acceptance criteria`: Covered DB creation, managed markdown indexing, representative queries by title text, slug, tag, status, type, path, actor, source, recent ordering, invalid/unmanaged skip behavior, and `mcpschema.SearchResult` output fields.
+- `Validation`: `GOCACHE=/private/tmp/cairn-go-cache go test -count=1 ./...`; `bash Flywheel/flywheel/tools/validate_intake_items.sh`; `git diff --check`.
+- `Risks and assumptions`: Chose `modernc.org/sqlite` to avoid CGO/platform setup. Tags/authors/actors are stored as JSON text for this slice; normalized join tables can be added if query needs grow.
+- `QA focus areas`: Verify schema path and SQLite dependency choice, invalid/unmanaged skip behavior, query coverage against `docs/adr/ADR-indexing-query-boundary.md`, and stable `SearchResult` fields.
+- `Completed work summary`: Implemented local metadata index creation, indexing, query behavior, and tests.
+- `Next suggested or required step`: QA should review the local index package against the indexing ADR and either move the story to done or file focused bugs.
+- `Next state recommendation`: engineering qa
+
+## QA Handoff
+- `Verdict`: Pass.
+- `Evidence summary`: The implementation creates `/.cairn/index/cairn.db`, uses a pure-Go SQLite driver, indexes valid managed markdown metadata, reports skipped invalid/unmanaged markdown, supports representative metadata queries, and returns `internal/mcpschema.SearchResult` fields aligned with the indexing ADR.
+- `Evidence quality call`: Strong for this metadata-only slice. Tests cover database creation, indexing, skip behavior, representative filters, recent ordering, and stable result shape.
+- `Defects`: None filed.
+- `Required fixes`: None.
+- `Validation`: `GOCACHE=/private/tmp/cairn-go-cache go mod tidy`; `GOCACHE=/private/tmp/cairn-go-cache go test -count=1 ./...`; `bash Flywheel/flywheel/tools/validate_intake_items.sh`; `git diff --check`.
+- `Completed work summary`: QA accepted the local metadata index foundation.
+- `Next suggested or required step`: Close the cycle with an observer report and commit, then run PM to refine the local full-text/degradation follow-up story.
+- `Next state recommendation`: engineering done
