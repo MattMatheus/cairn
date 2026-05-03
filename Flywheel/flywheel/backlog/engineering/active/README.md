@@ -4,10 +4,10 @@ Ordered execution queue for engineering implementation.
 
 ## Active Sequence
 
-No active engineering stories.
+1. `STORY-20260502-local-metadata-index.md`
 
 ## Next Ready Candidates
 
 After the active story passes QA, refine the remaining dependent story:
 
-1. `STORY-20260502-local-index-query-foundation.md`
+1. `STORY-20260503-local-full-text-search.md`
