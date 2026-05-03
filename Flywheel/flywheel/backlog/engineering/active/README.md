@@ -10,4 +10,4 @@ No active engineering stories.
 
 After the active story passes QA, refine the remaining dependent story:
 
-1. `STORY-20260503-local-full-text-search.md`
+No remaining engineering intake stories.

@@ -23,6 +23,11 @@ type Index struct {
 	db *sql.DB
 }
 
+type Metadata struct {
+	Path    string
+	Content string
+}
+
 type IndexReport struct {
 	Indexed []string
 	Skipped []SkippedFile
@@ -249,6 +254,17 @@ func (i *Index) Query(ctx context.Context, query Query) ([]mcpschema.SearchResul
 		results = append(results, result)
 	}
 	return results, rows.Err()
+}
+
+func (i *Index) Get(ctx context.Context, path string) (mcpschema.SearchResult, bool, error) {
+	results, err := i.Query(ctx, Query{Path: path, Limit: 1})
+	if err != nil {
+		return mcpschema.SearchResult{}, false, err
+	}
+	if len(results) == 0 {
+		return mcpschema.SearchResult{}, false, nil
+	}
+	return results[0], true, nil
 }
 
 func (i *Index) migrate(ctx context.Context) error {
