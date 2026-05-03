@@ -202,21 +202,21 @@ required_fields:
 }
 
 func teamContext() string {
-	return `# Team Context
+	return starterOnboardingDoc("cairn:OnboardingTeamContext", "Team Context", "team-context", `# Team Context
 
 Capture the pod purpose, current priorities, core systems, and collaboration norms here.
-`
+`)
 }
 
 func agentSetup() string {
-	return `# Agent Setup
+	return starterOnboardingDoc("cairn:OnboardingAgentSetup", "Agent Setup", "agent-setup", `# Agent Setup
 
 Use Cairn tools to search, validate, capture, promote, sync, and index workspace context.
-`
+`)
 }
 
 func workspaceMap() string {
-	return `# Workspace Map
+	return starterOnboardingDoc("cairn:OnboardingWorkspaceMap", "Workspace Map", "workspace-map", `# Workspace Map
 
 - inbox: inbound or unreviewed content
 - agents: agent-authored notes and handoffs
@@ -228,7 +228,28 @@ func workspaceMap() string {
 - handoffs: transition notes
 - onboarding: team and agent setup
 - archive: archived managed documents
-`
+`)
+}
+
+func starterOnboardingDoc(id string, title string, slug string, body string) string {
+	return fmt.Sprintf(`---
+id: %s
+schema_version: 1
+title: %s
+slug: %s
+type: onboarding
+status: draft
+created: 2026-05-03T00:00:00Z
+updated: 2026-05-03T00:00:00Z
+authors:
+  - cairn
+actors:
+  - cairn
+source: init
+tags: []
+---
+
+%s`, id, title, slug, body)
 }
 
 func agentsPointer() string {

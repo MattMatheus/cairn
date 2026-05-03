@@ -50,6 +50,15 @@ func TestInitCreatesStandardWorkspaceLayout(t *testing.T) {
 	if len(result.Created) == 0 {
 		t.Fatalf("expected created paths")
 	}
+	for _, file := range []string{
+		"onboarding/team-context.md",
+		"onboarding/agent-setup.md",
+		"onboarding/workspace-map.md",
+	} {
+		if !strings.Contains(readFile(t, root, file), "type: onboarding") {
+			t.Fatalf("%s missing starter onboarding frontmatter", file)
+		}
+	}
 }
 
 func TestInitIsIdempotentAndNonDestructive(t *testing.T) {

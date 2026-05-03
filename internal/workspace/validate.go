@@ -67,6 +67,9 @@ func validateDocument(root string, rel string, mode document.ValidationMode) ([]
 			Path:     rel,
 		}}, nil
 	}
+	if !isManagedMarkdown(rel, parsed) {
+		return nil, nil
+	}
 
 	result := document.Validate(parsed, mode)
 	out := make([]mcpschema.ValidationFinding, 0, len(result.Findings))
@@ -200,4 +203,17 @@ func hasErrors(findings []mcpschema.ValidationFinding) bool {
 		}
 	}
 	return false
+}
+
+func isManagedMarkdown(rel string, parsed document.ParseResult) bool {
+	if parsed.HasFrontmatter && parsed.Metadata.ID != "" {
+		return true
+	}
+	first, _, _ := strings.Cut(filepath.ToSlash(rel), "/")
+	switch first {
+	case "inbox", "agents", "working", "decisions", "runbooks", "projects", "services", "handoffs", "onboarding", "archive":
+		return true
+	default:
+		return false
+	}
 }

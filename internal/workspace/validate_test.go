@@ -15,8 +15,8 @@ import (
 
 func TestValidateReportsDocumentAndMetadataHealthFindings(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, root, "notes/missing.md", "# Missing frontmatter\n")
-	writeFile(t, root, "notes/invalid.md", `---
+	writeFile(t, root, "working/missing.md", "# Missing frontmatter\n")
+	writeFile(t, root, "working/invalid.md", `---
 id: bad
 schema_version: 1
 title: Invalid
@@ -40,15 +40,15 @@ tags: [test]
 	if !data.Healthy {
 		t.Fatalf("discovery validation should remain healthy with warnings: %#v", data.Findings)
 	}
-	assertFinding(t, data.Findings, "notes/missing.md", "", mcpschema.WarningValidation, "warning")
-	assertFinding(t, data.Findings, "notes/invalid.md", "", mcpschema.WarningValidation, "warning")
+	assertFinding(t, data.Findings, "working/missing.md", "", mcpschema.WarningValidation, "warning")
+	assertFinding(t, data.Findings, "working/invalid.md", "", mcpschema.WarningValidation, "warning")
 	assertFinding(t, data.Findings, ".cairn/index/cairn.db", "", mcpschema.WarningIndexDegraded, "warning")
 	assertFinding(t, data.Findings, ".cairn/sync-state.json", "", mcpschema.WarningSyncDivergence, "warning")
 }
 
 func TestValidateUsesDurableBoundarySeverity(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, root, "notes/missing.md", "# Missing frontmatter\n")
+	writeFile(t, root, "working/missing.md", "# Missing frontmatter\n")
 
 	data, err := Validate(context.Background(), root, ValidateOptions{Mode: document.ValidationModeDurableBoundary})
 	if err != nil {
@@ -57,14 +57,14 @@ func TestValidateUsesDurableBoundarySeverity(t *testing.T) {
 	if data.Healthy {
 		t.Fatalf("durable validation should be unhealthy with blocking document findings")
 	}
-	assertFinding(t, data.Findings, "notes/missing.md", "", mcpschema.WarningValidation, "error")
+	assertFinding(t, data.Findings, "working/missing.md", "", mcpschema.WarningValidation, "error")
 }
 
 func TestValidateSkipsIgnoredPaths(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, ".cairnignore", "ignored/\n")
 	writeFile(t, root, "ignored/bad.md", "# Ignored\n")
-	writeFile(t, root, "notes/good.md", validDoc("cairn:GoodDoc", "Good Doc", "good-doc"))
+	writeFile(t, root, "working/good.md", validDoc("cairn:GoodDoc", "Good Doc", "good-doc"))
 	writeHealthyMetadata(t, root)
 
 	data, err := Validate(context.Background(), root, ValidateOptions{})
@@ -81,7 +81,7 @@ func TestValidateSkipsIgnoredPaths(t *testing.T) {
 
 func TestValidateHealthyWorkspace(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, root, "notes/good.md", validDoc("cairn:GoodDoc", "Good Doc", "good-doc"))
+	writeFile(t, root, "working/good.md", validDoc("cairn:GoodDoc", "Good Doc", "good-doc"))
 	writeHealthyMetadata(t, root)
 
 	data, err := Validate(context.Background(), root, ValidateOptions{})
@@ -108,6 +108,21 @@ func TestValidateRejectsRequestedPathsOutsideWorkspace(t *testing.T) {
 	}
 	if len(data.Findings) != 0 {
 		t.Fatalf("expected outside path to be skipped, got %#v", data.Findings)
+	}
+}
+
+func TestValidateSkipsUnmanagedMarkdown(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "AGENTS.md", "# Pointer\n")
+	writeFile(t, root, "docs/raw.md", "# Raw Doc\n")
+	writeHealthyMetadata(t, root)
+
+	data, err := Validate(context.Background(), root, ValidateOptions{})
+	if err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+	if len(data.Findings) != 0 {
+		t.Fatalf("expected unmanaged markdown to be skipped, got %#v", data.Findings)
 	}
 }
 
