@@ -24,6 +24,6 @@ Responses map into Cairn schema types:
 ## Follow-Ups
 
 - Local Docker/Podman packaging prototype lives in `deployments/local-indexer/`.
-- Define Azure Container Apps deployment and auth enforcement.
+- Azure Container Apps deployment/auth plan lives in `deployments/azure-container-apps-indexer/`.
 - Define workspace-to-indexer refresh orchestration after sync pull/push.
 - Add semantic search integration into `search_context` once the service endpoint exists.

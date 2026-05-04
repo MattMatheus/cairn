@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260503-aca-indexer-deployment-plan
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: done
 - `source`: pm
 - `decision_refs`: [ADR-indexing-query-boundary]
 - `success_metric`: Cairn has a concrete ACA deployment/auth plan for the CocoIndex-backed remote indexer.
@@ -46,6 +46,20 @@
 ## Open Questions
 - Exact ACA auth enforcement mechanism.
 
-## Next Step
-- PM should keep this behind local packaging unless cloud deployment becomes the priority.
+## Engineering Handoff
+- Implemented 2026-05-03.
+- Added `deployments/azure-container-apps-indexer/README.md`.
+- Added `deployments/azure-container-apps-indexer/env.example`.
+- Documented ACA topology, Azure resources, identity/auth flow, secrets boundary, environment variables, network boundaries, operational checks, and failure modes.
+- Updated CocoIndex contract notes to point to the ACA deployment/auth plan.
 
+## QA Handoff
+- Accepted 2026-05-03.
+- Verified deployment plan identifies ACA, storage, identity, and network boundaries.
+- Verified auth flow avoids storing secrets in Cairn config.
+- Verified operational checks and failure modes are listed.
+- Verified follow-up implementation stories are identified.
+- Verification: manual review against `ADR-indexing-query-boundary` and north-star enterprise constraints; `GOCACHE=/private/tmp/cairn-go-cache go test ./...`.
+
+## Next Step
+- Promote `STORY-20260503-config-yaml-schema-validation`.
