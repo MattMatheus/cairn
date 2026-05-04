@@ -142,6 +142,35 @@ managed_folders:
 	assertFinding(t, data.Findings, "knowledge/base/raw.md", "", mcpschema.WarningValidation, "warning")
 }
 
+func TestValidateSurfacesConfigAndSchemaFindings(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, ".cairn/config.yaml", `schema_version: nope
+workspace_id: cairn:workspace:test
+managed_folders:
+  - working
+document_types:
+  memo: working
+`)
+	writeFile(t, root, ".cairn/schemas/custom.yaml", `schema_version: 1
+name: custom
+required_fields:
+  - id
+  - title
+`)
+	writeHealthyMetadata(t, root)
+
+	data, err := Validate(context.Background(), root, ValidateOptions{})
+	if err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+	if data.Healthy {
+		t.Fatalf("config/schema errors should make validation unhealthy: %#v", data.Findings)
+	}
+	assertFinding(t, data.Findings, ".cairn/config.yaml", "", mcpschema.WarningValidation, "error")
+	assertFinding(t, data.Findings, ".cairn/config.yaml", "", mcpschema.WarningValidation, "warning")
+	assertFinding(t, data.Findings, ".cairn/schemas/custom.yaml", "", mcpschema.WarningValidation, "error")
+}
+
 func assertFinding(t *testing.T, findings []mcpschema.ValidationFinding, path string, docID string, code mcpschema.WarningCode, severity string) {
 	t.Helper()
 	for _, finding := range findings {

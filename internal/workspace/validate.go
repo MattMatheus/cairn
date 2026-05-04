@@ -31,6 +31,7 @@ func Validate(ctx context.Context, root string, opts ValidateOptions) (mcpschema
 	}
 
 	var findings []mcpschema.ValidationFinding
+	findings = append(findings, configFindings(root)...)
 	paths, err := markdownPaths(root, opts.Paths, ignore)
 	if err != nil {
 		return mcpschema.ValidateWorkspaceData{}, err
@@ -51,6 +52,20 @@ func Validate(ctx context.Context, root string, opts ValidateOptions) (mcpschema
 		Findings: findings,
 		Healthy:  !hasErrors(findings),
 	}, nil
+}
+
+func configFindings(root string) []mcpschema.ValidationFinding {
+	raw := document.ValidateConfigFiles(root)
+	out := make([]mcpschema.ValidationFinding, 0, len(raw))
+	for _, finding := range raw {
+		out = append(out, mcpschema.ValidationFinding{
+			Severity: finding.Severity,
+			Code:     mcpschema.WarningValidation,
+			Message:  finding.Message,
+			Path:     finding.Path,
+		})
+	}
+	return out
 }
 
 func validateDocument(root string, rel string, mode document.ValidationMode) ([]mcpschema.ValidationFinding, error) {

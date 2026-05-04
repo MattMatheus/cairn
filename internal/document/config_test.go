@@ -3,6 +3,7 @@ package document
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -53,6 +54,60 @@ document_types:
 	}
 }
 
+func TestValidateConfigFilesReportsMalformedConfig(t *testing.T) {
+	root := t.TempDir()
+	writeConfig(t, root, `schema_version: two
+workspace_id:
+managed_folders:
+  not-a-list
+document_types:
+  runbook: ../outside
+broken line
+`)
+
+	findings := ValidateConfigFiles(root)
+	assertConfigFinding(t, findings, ".cairn/config.yaml", "error", "schema_version must be 1")
+	assertConfigFinding(t, findings, ".cairn/config.yaml", "error", "workspace_id is required")
+	assertConfigFinding(t, findings, ".cairn/config.yaml", "error", "managed_folders entries must use list syntax")
+	assertConfigFinding(t, findings, ".cairn/config.yaml", "error", "document type destination is invalid")
+	assertConfigFinding(t, findings, ".cairn/config.yaml", "error", "malformed top-level config entry")
+}
+
+func TestValidateConfigFilesWarnsForUnknownDocumentTypeMapping(t *testing.T) {
+	root := t.TempDir()
+	writeConfig(t, root, `schema_version: 1
+workspace_id: cairn:workspace:test
+managed_folders:
+  - working
+document_types:
+  memo: working
+`)
+
+	findings := ValidateConfigFiles(root)
+	assertConfigFinding(t, findings, ".cairn/config.yaml", "warning", "unknown document type mapping memo")
+}
+
+func TestValidateConfigFilesReportsSchemaMissingCoreFields(t *testing.T) {
+	root := t.TempDir()
+	writeConfig(t, root, `schema_version: 1
+workspace_id: cairn:workspace:test
+managed_folders:
+  - working
+document_types:
+  note: working
+`)
+	writeSchema(t, root, "custom.yaml", `schema_version: 1
+name: custom
+required_fields:
+  - id
+  - title
+`)
+
+	findings := ValidateConfigFiles(root)
+	assertConfigFinding(t, findings, ".cairn/schemas/custom.yaml", "error", "required_fields must include Cairn core field schema_version")
+	assertConfigFinding(t, findings, ".cairn/schemas/custom.yaml", "error", "required_fields must include Cairn core field tags")
+}
+
 func writeConfig(t *testing.T, root string, content string) {
 	t.Helper()
 	path := filepath.Join(root, ".cairn", "config.yaml")
@@ -62,4 +117,25 @@ func writeConfig(t *testing.T, root string, content string) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
+}
+
+func writeSchema(t *testing.T, root string, name string, content string) {
+	t.Helper()
+	path := filepath.Join(root, ".cairn", "schemas", name)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+}
+
+func assertConfigFinding(t *testing.T, findings []ConfigFinding, path string, severity string, contains string) {
+	t.Helper()
+	for _, finding := range findings {
+		if finding.Path == path && finding.Severity == severity && strings.Contains(finding.Message, contains) {
+			return
+		}
+	}
+	t.Fatalf("missing config finding path=%s severity=%s contains=%q in %#v", path, severity, contains, findings)
 }
