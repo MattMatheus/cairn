@@ -10,7 +10,6 @@ No active engineering stories.
 
 After the active story passes QA, continue through the intake backlog in this rough order:
 
-- Remote index search integration
 - Index refresh contract wiring
 - MCP mutating tools gated surface
 - CocoIndex local packaging prototype

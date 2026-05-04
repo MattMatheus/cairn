@@ -8,6 +8,7 @@ import (
 
 	"cairn/internal/localindex"
 	"cairn/internal/mcpschema"
+	"cairn/internal/remoteindex"
 	"cairn/internal/remotestore"
 )
 
@@ -15,6 +16,7 @@ type Local struct {
 	Root        string
 	Index       *localindex.Index
 	Now         func() time.Time
+	RemoteIndex remoteindex.Client
 	RemoteStore remotestore.Store
 }
 
@@ -55,9 +57,11 @@ func (l *Local) GetBootstrap(_ context.Context, _ mcpschema.EmptyRequest) (mcpsc
 
 func (l *Local) SearchContext(ctx context.Context, req mcpschema.SearchContextRequest) (mcpschema.Envelope[mcpschema.SearchContextData], error) {
 	return l.Index.Search(ctx, l.Root, localindex.SearchOptions{
-		Query: req.Query,
-		Mode:  req.Mode,
-		Limit: req.Limit,
+		Query:       req.Query,
+		Mode:        req.Mode,
+		Limit:       req.Limit,
+		WorkspaceID: l.provenance("search_context").WorkspaceID,
+		Remote:      l.RemoteIndex,
 	})
 }
 

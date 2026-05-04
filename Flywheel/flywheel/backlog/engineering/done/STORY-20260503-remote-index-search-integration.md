@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260503-remote-index-search-integration
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: done
 - `source`: pm
 - `decision_refs`: [ADR-indexing-query-boundary, ADR-mcp-operation-surface]
 - `success_metric`: `search_context` can optionally call the remote indexer contract and merge/degrade results without exposing remote internals.
@@ -50,6 +50,23 @@
 ## Open Questions
 - Exact config source for remote index endpoint and auth token provider in v1.
 
-## Next Step
-- Engineering should wire remote search after sync dry-run planning or when indexer config is ready.
+## Engineering Handoff
+- Implemented 2026-05-03.
+- Added optional `remoteindex.Client` integration behind `localindex.Search`.
+- Auto mode keeps local metadata and full-text ordering, then attempts configured semantic remote search.
+- Semantic mode calls the configured remote indexer directly.
+- Remote results map through the existing stable `mcpschema.SearchResult` shape.
+- Remote failures degrade into warnings, unavailable modes, and next steps instead of failing local search.
+- Wired `mcpops.Local.SearchContext` to pass the configured remote index client.
 
+## QA Handoff
+- Accepted 2026-05-03.
+- Verified auto mode attempts metadata, full-text, semantic in order.
+- Verified semantic mode calls configured remote indexer.
+- Verified merged local/remote results dedupe by path and keep local results first.
+- Verified remote result provenance and match type are preserved in Cairn schema.
+- Verified unconfigured and failing remote indexers degrade gracefully.
+- Verification: `GOCACHE=/private/tmp/cairn-go-cache go test ./...`
+
+## Next Step
+- Promote `STORY-20260503-index-refresh-contract-wiring`.

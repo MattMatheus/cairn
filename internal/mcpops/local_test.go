@@ -9,6 +9,7 @@ import (
 
 	"cairn/internal/localindex"
 	"cairn/internal/mcpschema"
+	"cairn/internal/remoteindex"
 )
 
 func TestLocalSearchContextUsesEnvelopeAndDegradation(t *testing.T) {
@@ -29,6 +30,31 @@ func TestLocalSearchContextUsesEnvelopeAndDegradation(t *testing.T) {
 	}
 	if envelope.Provenance.Profile != mcpschema.ProfileLocal {
 		t.Fatalf("expected local provenance: %#v", envelope.Provenance)
+	}
+}
+
+func TestLocalSearchContextUsesRemoteIndexWhenConfigured(t *testing.T) {
+	ops := newFixtureOps(t)
+	remote := &remoteindex.FakeClient{
+		SearchResponse: remoteindex.SearchResponse{
+			Results: []remoteindex.SearchResult{{Path: "runbooks/semantic.md", Title: "Semantic", Source: "remote_index"}},
+		},
+	}
+	ops.RemoteIndex = remote
+
+	envelope, err := ops.SearchContext(context.Background(), mcpschema.SearchContextRequest{
+		Query: "semantic",
+		Mode:  mcpschema.SearchModeSemantic,
+		Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("SearchContext returned error: %v", err)
+	}
+	if len(remote.Calls) != 1 || len(envelope.Data.Results) != 1 {
+		t.Fatalf("expected remote search integration, calls=%#v envelope=%#v", remote.Calls, envelope)
+	}
+	if envelope.Data.Results[0].MatchType != mcpschema.SearchModeSemantic {
+		t.Fatalf("expected semantic result shape: %#v", envelope.Data.Results[0])
 	}
 }
 

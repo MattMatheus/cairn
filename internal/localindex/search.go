@@ -9,12 +9,15 @@ import (
 
 	"cairn/internal/document"
 	"cairn/internal/mcpschema"
+	"cairn/internal/remoteindex"
 )
 
 type SearchOptions struct {
-	Query string
-	Mode  mcpschema.SearchMode
-	Limit int
+	Query       string
+	Mode        mcpschema.SearchMode
+	Limit       int
+	WorkspaceID string
+	Remote      remoteindex.Client
 }
 
 func (i *Index) Search(ctx context.Context, root string, opts SearchOptions) (mcpschema.Envelope[mcpschema.SearchContextData], error) {
@@ -54,10 +57,21 @@ func (i *Index) Search(ctx context.Context, root string, opts SearchOptions) (mc
 		envelope.Data = mcpschema.SearchContextData{Results: fullTextResults, AttemptedModes: attempted}
 	case mcpschema.SearchModeSemantic:
 		attempted = append(attempted, mcpschema.SearchModeSemantic)
-		envelope.Warnings = append(envelope.Warnings, unavailableSemanticWarning())
-		envelope.Unavailable = append(envelope.Unavailable, unavailableSemanticMode())
-		envelope.NextSteps = append(envelope.NextSteps, checkIndexStatusStep())
-		envelope.Data = mcpschema.SearchContextData{Results: nil, AttemptedModes: attempted}
+		remoteResults, remoteOK, err := remoteSemanticSearch(ctx, opts, limit)
+		if err != nil {
+			return envelope, err
+		}
+		if remoteOK {
+			results = appendUniqueResults(results, remoteResults.Data.Results, limit)
+			envelope.Warnings = append(envelope.Warnings, remoteResults.Warnings...)
+			envelope.Unavailable = append(envelope.Unavailable, remoteResults.Unavailable...)
+			envelope.NextSteps = append(envelope.NextSteps, remoteResults.NextSteps...)
+		} else {
+			envelope.Warnings = append(envelope.Warnings, unavailableSemanticWarning())
+			envelope.Unavailable = append(envelope.Unavailable, unavailableSemanticMode())
+			envelope.NextSteps = append(envelope.NextSteps, checkIndexStatusStep())
+		}
+		envelope.Data = mcpschema.SearchContextData{Results: results, AttemptedModes: attempted}
 	default:
 		attempted = append(attempted, mcpschema.SearchModeMetadata)
 		metadataResults, err := i.Query(ctx, Query{Text: opts.Query, Limit: limit})
@@ -74,9 +88,20 @@ func (i *Index) Search(ctx context.Context, root string, opts SearchOptions) (mc
 		results = appendUniqueResults(results, fullTextResults, limit)
 
 		attempted = append(attempted, mcpschema.SearchModeSemantic)
-		envelope.Warnings = append(envelope.Warnings, unavailableSemanticWarning(), unavailableRemoteWarning())
-		envelope.Unavailable = append(envelope.Unavailable, unavailableSemanticMode(), unavailableRemoteMode())
-		envelope.NextSteps = append(envelope.NextSteps, checkIndexStatusStep())
+		remoteResults, remoteOK, err := remoteSemanticSearch(ctx, opts, limit)
+		if err != nil {
+			return envelope, err
+		}
+		if remoteOK {
+			results = appendUniqueResults(results, remoteResults.Data.Results, limit)
+			envelope.Warnings = append(envelope.Warnings, remoteResults.Warnings...)
+			envelope.Unavailable = append(envelope.Unavailable, remoteResults.Unavailable...)
+			envelope.NextSteps = append(envelope.NextSteps, remoteResults.NextSteps...)
+		} else {
+			envelope.Warnings = append(envelope.Warnings, unavailableSemanticWarning(), unavailableRemoteWarning())
+			envelope.Unavailable = append(envelope.Unavailable, unavailableSemanticMode(), unavailableRemoteMode())
+			envelope.NextSteps = append(envelope.NextSteps, checkIndexStatusStep())
+		}
 		envelope.Data = mcpschema.SearchContextData{Results: results, AttemptedModes: attempted}
 	}
 
@@ -86,6 +111,36 @@ func (i *Index) Search(ctx context.Context, root string, opts SearchOptions) (mc
 	}
 	envelope.Provenance.AttemptedModes = attemptedStrings
 	return envelope, nil
+}
+
+func remoteSemanticSearch(ctx context.Context, opts SearchOptions, limit int) (mcpschema.Envelope[mcpschema.SearchContextData], bool, error) {
+	if opts.Remote == nil {
+		return mcpschema.Envelope[mcpschema.SearchContextData]{}, false, nil
+	}
+	response, err := opts.Remote.Search(ctx, remoteindex.SearchRequest{
+		WorkspaceID: opts.WorkspaceID,
+		Query:       opts.Query,
+		Mode:        mcpschema.SearchModeSemantic,
+		Limit:       limit,
+	})
+	if err != nil {
+		envelope := mcpschema.Envelope[mcpschema.SearchContextData]{
+			OK: false,
+			Warnings: []mcpschema.Warning{{
+				Code:    mcpschema.WarningRemoteService,
+				Message: "remote indexer search failed: " + err.Error(),
+			}},
+			Unavailable: []mcpschema.UnavailableMode{{
+				Mode:      "remote",
+				Reason:    mcpschema.WarningRemoteService,
+				Message:   "remote indexer search failed",
+				Retryable: true,
+			}},
+			NextSteps: []mcpschema.NextStep{checkIndexStatusStep()},
+		}
+		return envelope, true, nil
+	}
+	return response.Envelope(), true, nil
 }
 
 func (i *Index) FullText(ctx context.Context, root string, query string, limit int) ([]mcpschema.SearchResult, error) {
