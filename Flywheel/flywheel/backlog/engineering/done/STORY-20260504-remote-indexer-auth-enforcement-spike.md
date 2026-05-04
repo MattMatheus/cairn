@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260504-remote-indexer-auth-enforcement-spike
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: done
 - `source`: planning
 - `decision_refs`: [ADR-indexing-query-boundary, ADR-mcp-operation-surface]
 - `success_metric`: Cairn has a concrete recommendation for ACA built-in auth versus indexer middleware token validation.
@@ -47,4 +47,12 @@
 - Whether ACA built-in auth exposes enough claims to avoid custom middleware in v1.
 
 ## Next Step
-- PM should decide whether this needs an ADR addendum or can remain an implementation spike.
+- Planning should create the follow-up implementation story for ACA auth configuration and indexer authorization shim when remote deployment work resumes.
+
+## Handoff Notes
+- Engineering completed 2026-05-04.
+- Added `docs/product/remote-indexer-auth-enforcement.md`.
+- Recommended ACA built-in Microsoft Entra auth at the edge for V1, with indexer-side workspace/pod authorization from authenticated principal claims.
+- Deferred custom JWT middleware unless tenant testing shows ACA auth headers/claims are insufficient.
+- Updated the ACA deployment README to point to the auth enforcement recommendation.
+- QA completed 2026-05-04 with static review against north-star auth constraints and full `go test ./...`.

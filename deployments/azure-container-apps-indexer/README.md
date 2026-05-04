@@ -59,6 +59,8 @@ Container App: cairn-indexer
 
 Cairn callers should not store API keys in workspace config.
 
+Auth enforcement recommendation: use ACA built-in Microsoft Entra authentication at the edge for v1, then perform workspace/pod authorization in the indexer from authenticated principal claims. See `docs/product/remote-indexer-auth-enforcement.md`.
+
 Preferred flow:
 
 1. User or agent signs in with Azure CLI.
