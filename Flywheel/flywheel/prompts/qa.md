@@ -36,6 +36,8 @@ Validate the top engineering story from the configured engineering QA lane.
 - evidence quality call
 - bug paths when defects are filed
 - state transition decision
+- completed work summary
+- next suggested or required step
 
 ## Constraints
 - no silent failures

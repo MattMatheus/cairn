@@ -33,6 +33,8 @@ Run an operator-guided planning cycle before architecture or implementation work
 - created intake artifact paths
 - explicit next-stage recommendation
 - key assumptions, risks, and scope boundary
+- completed work summary
+- next suggested or required step
 
 ## Constraints
 - keep planning separate from implementation

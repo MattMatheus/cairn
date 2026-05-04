@@ -30,6 +30,7 @@ The harness does not require a product-specific repo layout. Operators should us
 - Use one commit per completed cycle.
 - Treat artifact readiness as explicit, not implied.
 - Record validation evidence, open risks, and next-state recommendation in handoffs.
+- When a work operation completes, report both the work completed and the next suggested or required step.
 - Use the smallest useful action model:
   - `read`
   - `local write`
@@ -56,8 +57,9 @@ These locations are owned by `flywheel.yaml`:
 2. Read the stage prompt from the configured prompt directory.
 3. Work only in the configured backlog lanes and artifact directories.
 4. Produce the required handoff for the stage.
-5. Run `flywheel/tools/run_observer_cycle.sh` at cycle closure.
-6. Commit using `workflow.cycle_commit_format`.
+5. Report the work completed and the next suggested or required step.
+6. Run `flywheel/tools/run_observer_cycle.sh` at cycle closure.
+7. Commit using `workflow.cycle_commit_format`.
 
 If `integrations.artifact_workflow.enabled` is `true`, use the artifact-tool commands surfaced by `launch_stage.sh` and `run_observer_cycle.sh` when they help with artifact selection or durable handoff records.
 

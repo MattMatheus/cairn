@@ -35,6 +35,7 @@ These should be resolved from `paths.prompts`.
 - Treat QA as a gate, not a suggestion.
 - Treat artifact readiness as explicit, not implied.
 - Record evidence, risks, and next-state recommendation in stage handoffs.
+- When a work operation completes, report both the work completed and the next suggested or required step.
 - Treat the artifact tool as an optional integration and use it only when the repo config enables it.
 - When the artifact workflow integration is enabled, treat `flywheel/tools/artifact_workflow.sh --format json` as the canonical machine-readable source for stage entry and exit artifact guidance.
 - Interpret the JSON output consistently:

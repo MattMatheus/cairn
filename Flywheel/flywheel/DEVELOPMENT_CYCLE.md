@@ -54,6 +54,7 @@ Flywheel runs a staged workflow with explicit queue movement and cycle closure.
 - Workflow locations are resolved from `flywheel.yaml`.
 - Observer is part of cycle closure, not optional cleanup.
 - Artifact readiness must be explicit before promotion.
+- Completed work operations report both completed work and the next suggested or required step.
 - Optional artifact-tool usage may be surfaced by config, but Flywheel core does not require that integration.
 - When the optional artifact workflow integration is enabled, agents should consult `flywheel/tools/artifact_workflow.sh <stage> --format json` for machine-readable stage entry and exit artifact guidance.
 - Risky or sensitive actions require explicit approval and recorded outcome.

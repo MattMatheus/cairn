@@ -31,6 +31,8 @@ Refine backlog intake and maintain the configured active queues.
 - updated queue ordering
 - explicit next-ready work
 - clarified risks or dependencies
+- completed work summary
+- next suggested or required step
 
 ## Constraints
 - do not implement fixes in PM mode
