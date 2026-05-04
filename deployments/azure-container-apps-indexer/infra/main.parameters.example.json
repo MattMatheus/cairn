@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": {
+      "value": "pod-a-dev"
+    },
+    "containerImage": {
+      "value": "ghcr.io/example/cairn-indexer:latest"
+    },
+    "workspaceId": {
+      "value": "cairn:workspace:pod-a"
+    },
+    "storageAccountName": {
+      "value": "examplecairn"
+    },
+    "storageContainerName": {
+      "value": "pod-a"
+    },
+    "storagePrefix": {
+      "value": ""
+    },
+    "authAudience": {
+      "value": "api://cairn-indexer"
+    },
+    "authTenantId": {
+      "value": "00000000-0000-0000-0000-000000000000"
+    },
+    "postgresDsnSecretName": {
+      "value": "postgres-dsn"
+    }
+  }
+}

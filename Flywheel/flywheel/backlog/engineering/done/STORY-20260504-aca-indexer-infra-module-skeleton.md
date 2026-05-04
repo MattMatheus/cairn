@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260504-aca-indexer-infra-module-skeleton
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: done
 - `source`: planning
 - `decision_refs`: [ADR-indexing-query-boundary]
 - `success_metric`: The documented ACA indexer plan has a checked-in infrastructure module skeleton that can be reviewed before live deployment.
@@ -44,7 +44,16 @@
 - Avoid implying production readiness before auth enforcement is resolved.
 
 ## Open Questions
-- Bicep versus Terraform.
+- Resolved for V1 skeleton: use Bicep as the smallest Azure-native scaffold because the repo has no Terraform convention yet.
 
 ## Next Step
-- PM should choose the IaC format, then engineering should scaffold the module.
+- Promote `STORY-20260504-remote-indexer-auth-enforcement-spike`.
+
+## Handoff Notes
+- Engineering completed 2026-05-04.
+- Chose Bicep for the V1 infrastructure skeleton.
+- Added `deployments/azure-container-apps-indexer/infra/main.bicep`.
+- Added secret-free example parameters.
+- Updated the ACA deployment README with render and what-if commands.
+- QA completed 2026-05-04 with static review, JSON parameter parsing, and full `go test ./...`.
+- Local Azure CLI/Bicep tooling was unavailable, so `az bicep build` was not run.

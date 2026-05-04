@@ -1,6 +1,6 @@
 # Azure Container Apps Indexer Deployment Plan
 
-This plan describes a deployable Azure Container Apps shape for the Cairn remote indexer contract. It is intentionally not Terraform/Bicep yet.
+This plan describes a deployable Azure Container Apps shape for the Cairn remote indexer contract. A reviewable Bicep skeleton lives in `infra/`.
 
 ## Goals
 
@@ -163,10 +163,37 @@ Enterprise preferred:
 
 ## Follow-Up Stories
 
-- Add Bicep or Terraform module for ACA indexer resources.
 - Add Entra ID app registration and token validation middleware.
 - Add Cairn config schema fields for `remote_index`.
 - Add Azure CLI token provider for `remoteindex.HTTPClient`.
 - Add remote index status/refresh CLI configuration wiring.
 - Add CocoIndex pipeline image that writes Postgres/pgvector artifacts.
 - Add production runbook for refresh failures and index freshness checks.
+
+## Infrastructure Skeleton
+
+The `infra/main.bicep` module is a scaffold for review and local rendering. It models:
+
+- Log Analytics workspace.
+- Azure Container Apps environment.
+- User-assigned managed identity.
+- Container App with external HTTPS ingress.
+- Storage Blob Data Reader assignment for an existing workspace storage account.
+- PostgreSQL connection as an infrastructure-owned secret reference name, not a checked-in value.
+
+Render the template locally:
+
+```sh
+az bicep build --file deployments/azure-container-apps-indexer/infra/main.bicep
+```
+
+Preview a deployment:
+
+```sh
+az deployment group what-if \
+  --resource-group <resource-group> \
+  --template-file deployments/azure-container-apps-indexer/infra/main.bicep \
+  --parameters @deployments/azure-container-apps-indexer/infra/main.parameters.example.json
+```
+
+The example parameters file contains no secrets. Replace placeholder IDs and image names before any real deployment.
