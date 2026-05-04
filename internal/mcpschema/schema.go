@@ -378,6 +378,7 @@ type SyncConflict struct {
 
 type SyncMutationData struct {
 	MutationResult
+	Applied  bool          `json:"applied"`
 	Diverged bool          `json:"diverged"`
 	Plan     *SyncPlanData `json:"plan,omitempty"`
 }

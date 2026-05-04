@@ -8,12 +8,14 @@ import (
 
 	"cairn/internal/localindex"
 	"cairn/internal/mcpschema"
+	"cairn/internal/remotestore"
 )
 
 type Local struct {
-	Root  string
-	Index *localindex.Index
-	Now   func() time.Time
+	Root        string
+	Index       *localindex.Index
+	Now         func() time.Time
+	RemoteStore remotestore.Store
 }
 
 func OpenLocal(root string) (*Local, error) {

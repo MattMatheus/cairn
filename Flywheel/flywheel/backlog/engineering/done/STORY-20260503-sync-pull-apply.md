@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260503-sync-pull-apply
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: done
 - `source`: pm
 - `decision_refs`: [ADR-sync-conflict-behavior, ADR-mcp-operation-surface]
 - `success_metric`: Cairn can safely apply remote-only workspace changes to the local workspace and update local sync state.
@@ -50,6 +50,23 @@
 ## Open Questions
 - Whether pull should stage writes through temporary files for stronger atomicity in v1.
 
-## Next Step
-- Engineering should implement only after dry-run planning lands.
+## Engineering Handoff
+- Implemented 2026-05-03.
+- Added `syncstate.ApplyPull` for safe remote-only pull plans.
+- Pull apply fetches create/edit/move/archive content through a remote object reader.
+- Pull apply removes local files for remote deletes only after the plan is accepted as remote-only.
+- Sync state advances to the accepted remote manifest only after all pull writes/removals succeed.
+- Added `mcpops.Local.SyncPull` and a CLI `sync pull` surface.
 
+## QA Handoff
+- Accepted 2026-05-03.
+- Verified remote create/edit application.
+- Verified remote archive/move preserves document identity by path and `document_id`.
+- Verified remote delete removes local files only on accepted remote-only plans.
+- Verified divergence refuses without changing workspace files or sync state.
+- Verified missing remote objects do not advance sync state.
+- Fixed QA finding: move/archive now fetches and writes the new remote object before removing the old local path.
+- Verification: `GOCACHE=/private/tmp/cairn-go-cache go test ./...`
+
+## Next Step
+- Promote `STORY-20260503-sync-push-apply`.
