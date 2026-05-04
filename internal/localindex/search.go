@@ -151,9 +151,13 @@ func (i *Index) FullText(ctx context.Context, root string, query string, limit i
 	if needle == "" {
 		return nil, nil
 	}
+	ignore, err := loadIgnore(root)
+	if err != nil {
+		return nil, err
+	}
 
 	var matches []fullTextMatch
-	err := filepath.WalkDir(root, func(absolutePath string, entry os.DirEntry, walkErr error) error {
+	err = filepath.WalkDir(root, func(absolutePath string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -169,6 +173,12 @@ func (i *Index) FullText(ctx context.Context, root string, query string, limit i
 			if rel == ".cairn" || rel == ".git" {
 				return filepath.SkipDir
 			}
+			if ignore.matches(rel, true) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if ignore.matches(rel, false) {
 			return nil
 		}
 		if !strings.EqualFold(filepath.Ext(rel), ".md") {

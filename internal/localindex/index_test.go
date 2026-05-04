@@ -72,6 +72,34 @@ func TestIndexWorkspaceIndexesManagedMarkdownAndSkipsInvalidFiles(t *testing.T) 
 	}
 }
 
+func TestIndexWorkspaceHonorsCairnignore(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, ".cairnignore", "ignored/\n")
+	writeFile(t, root, "ignored/hidden.md", managedMarkdown("cairn:hidden", "Hidden", "hidden", "note", "working", nil, nil, []string{"matt"}, "capture", "2026-05-03T12:00:00Z"))
+	writeFile(t, root, "working/visible.md", managedMarkdown("cairn:visible", "Visible", "visible", "note", "working", nil, nil, []string{"matt"}, "capture", "2026-05-03T12:00:00Z"))
+
+	index, err := Open(root)
+	if err != nil {
+		t.Fatalf("Open returned error: %v", err)
+	}
+	defer index.Close()
+
+	report, err := index.IndexWorkspace(context.Background(), root)
+	if err != nil {
+		t.Fatalf("IndexWorkspace returned error: %v", err)
+	}
+	if len(report.Indexed) != 1 || report.Indexed[0] != "working/visible.md" {
+		t.Fatalf("unexpected indexed paths: %#v", report.Indexed)
+	}
+	results, err := index.Query(context.Background(), Query{Text: "Hidden"})
+	if err != nil {
+		t.Fatalf("Query returned error: %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("ignored document should not be indexed: %#v", results)
+	}
+}
+
 func TestQuerySupportsRepresentativeMetadataFiltersAndRecentOrdering(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "runbooks/auth.md", managedMarkdown("cairn:auth", "Auth Timeout Runbook", "auth-timeout-runbook", "runbook", "canonical", []string{"auth"}, []string{"codex"}, []string{"matt"}, "promotion", "2026-05-02T12:00:00Z"))

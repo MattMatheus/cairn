@@ -40,6 +40,30 @@ func TestFullTextSearchFindsManagedMarkdownBody(t *testing.T) {
 	}
 }
 
+func TestFullTextSearchHonorsCairnignore(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, ".cairnignore", "ignored/\n")
+	writeFile(t, root, "ignored/hidden.md", managedMarkdownWithBody("cairn:hidden", "Hidden", "hidden", "note", "working", []string{"test"}, []string{"codex"}, []string{"matt"}, "capture", "2026-05-03T12:00:00Z", "needle"))
+	writeFile(t, root, "working/visible.md", managedMarkdownWithBody("cairn:visible", "Visible", "visible", "note", "working", []string{"test"}, []string{"codex"}, []string{"matt"}, "capture", "2026-05-03T12:00:00Z", "needle"))
+
+	index, err := Open(root)
+	if err != nil {
+		t.Fatalf("Open returned error: %v", err)
+	}
+	defer index.Close()
+	if _, err := index.IndexWorkspace(context.Background(), root); err != nil {
+		t.Fatalf("IndexWorkspace returned error: %v", err)
+	}
+
+	results, err := index.FullText(context.Background(), root, "needle", 10)
+	if err != nil {
+		t.Fatalf("FullText returned error: %v", err)
+	}
+	if len(results) != 1 || results[0].Path != "working/visible.md" {
+		t.Fatalf("unexpected full-text results: %#v", results)
+	}
+}
+
 func TestSearchAutoUsesMetadataThenFullTextAndReportsDegradation(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "runbooks/auth.md", managedMarkdownWithBody("cairn:auth", "Auth Timeout Runbook", "auth-timeout-runbook", "runbook", "canonical", []string{"auth"}, []string{"codex"}, []string{"matt"}, "promotion", "2026-05-02T12:00:00Z", "Retry auth token requests with bounded exponential backoff."))

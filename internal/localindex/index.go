@@ -80,8 +80,12 @@ func (i *Index) Close() error {
 }
 
 func (i *Index) IndexWorkspace(ctx context.Context, root string) (IndexReport, error) {
+	ignore, err := loadIgnore(root)
+	if err != nil {
+		return IndexReport{}, err
+	}
 	var report IndexReport
-	err := filepath.WalkDir(root, func(absolutePath string, entry os.DirEntry, walkErr error) error {
+	err = filepath.WalkDir(root, func(absolutePath string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -97,6 +101,12 @@ func (i *Index) IndexWorkspace(ctx context.Context, root string) (IndexReport, e
 			if rel == ".cairn" || rel == ".git" {
 				return filepath.SkipDir
 			}
+			if ignore.matches(rel, true) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if ignore.matches(rel, false) {
 			return nil
 		}
 		if !strings.EqualFold(filepath.Ext(rel), ".md") {

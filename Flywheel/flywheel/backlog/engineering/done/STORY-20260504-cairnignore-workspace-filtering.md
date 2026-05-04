@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260504-cairnignore-workspace-filtering
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: done
 - `source`: planning
 - `decision_refs`: [ADR-sync-conflict-behavior, ADR-document-model-lifecycle, ADR-indexing-query-boundary]
 - `success_metric`: Cairn consistently excludes `.cairnignore` paths from validation, indexing, search, and sync manifests.
@@ -47,7 +47,14 @@
 - Accidentally hiding `.cairn/sync-state.json` or generated control files from operations that still need them.
 
 ## Open Questions
-- Whether v1 needs `!negation` support or can defer it.
+- Resolved for V1: support `!negation` because existing validation/sync ignore parsing already handles it.
 
 ## Next Step
-- PM should refine the v1 ignore rule subset, then engineering should implement the shared filter.
+- Promote `STORY-20260504-sync-delete-purge-propagation`.
+
+## Handoff Notes
+- Engineering completed 2026-05-04.
+- Confirmed validation and sync manifest generation already honored `.cairnignore`.
+- Added `.cairnignore` filtering to local metadata indexing and full-text search scans.
+- Added tests for ignored metadata and full-text documents.
+- QA completed 2026-05-04 with focused workspace/localindex/syncstate tests and full `go test ./...`.
