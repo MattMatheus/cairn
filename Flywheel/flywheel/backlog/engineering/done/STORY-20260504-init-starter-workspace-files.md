@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260504-init-starter-workspace-files
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: done
 - `source`: planning
 - `decision_refs`: [ADR-document-model-lifecycle, ADR-mcp-operation-surface]
 - `success_metric`: `cairn init` creates the v1 starter workspace files expected by the north star.
@@ -47,7 +47,14 @@
 - Starter docs can become too verbose; keep them pointer-sized.
 
 ## Open Questions
-- Exact starter onboarding path and schema filenames.
+- Resolved by existing implementation: `.cairn/schemas/core.yaml`, `.cairn/schemas/README.md`, `onboarding/team-context.md`, `onboarding/agent-setup.md`, and `onboarding/workspace-map.md`.
 
 ## Next Step
-- PM should refine the starter file list before engineering.
+- Promote `STORY-20260504-aca-indexer-infra-module-skeleton`.
+
+## Handoff Notes
+- Engineering verified 2026-05-04.
+- Existing `cairn init` already creates `.cairnignore`, starter schemas, onboarding docs, `AGENTS.md`, and `CLAUDE.md`.
+- Existing implementation is idempotent and non-destructive for pre-existing files.
+- Existing CLI output reports created/existing paths and a next validation step.
+- QA completed 2026-05-04 with focused workspace/CLI init tests and full `go test ./...`.
