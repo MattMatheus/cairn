@@ -84,6 +84,32 @@ func TestSyncPullAppliesRemoteOnlyPlan(t *testing.T) {
 	}
 }
 
+func TestSyncPushAppliesLocalOnlyPlan(t *testing.T) {
+	root := t.TempDir()
+	base := syncstate.Manifest{ManifestVersion: syncstate.ManifestVersion, WorkspaceID: "pod-1"}
+	if err := syncstate.Save(root, syncstate.State{Entries: base.Entries}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	writeSyncRemoteManifest(t, root, base)
+	writeFile(t, root, "working/local.md", managedMarkdown("cairn:local", "Local", "local", "note", "working", nil, []string{"codex"}, []string{"matt"}, "capture", "2026-05-03T12:00:00Z", "Local body."))
+	store := remotestore.NewMemoryStore()
+
+	local := &Local{Root: root, RemoteStore: store}
+	envelope, err := local.SyncPush(context.Background(), mcpschema.SyncRequest{})
+	if err != nil {
+		t.Fatalf("SyncPush() error = %v", err)
+	}
+	if !envelope.OK || !envelope.Data.Applied || len(envelope.Data.ChangedPaths) != 1 {
+		t.Fatalf("unexpected push envelope: %#v", envelope)
+	}
+	if _, ok, err := store.ReadObject(context.Background(), "working/local.md"); err != nil || !ok {
+		t.Fatalf("expected pushed remote object ok=%t err=%v", ok, err)
+	}
+	if _, ok, err := store.ReadManifest(context.Background()); err != nil || !ok {
+		t.Fatalf("expected pushed remote manifest ok=%t err=%v", ok, err)
+	}
+}
+
 func writeSyncRemoteManifest(t *testing.T, root string, manifest syncstate.Manifest) {
 	t.Helper()
 	content, err := json.MarshalIndent(manifest, "", "  ")

@@ -59,6 +59,15 @@ func (s *MemoryStore) WriteObject(ctx context.Context, path string, content []by
 	return nil
 }
 
+func (s *MemoryStore) DeleteObject(ctx context.Context, path string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.ensure()
+	delete(s.Objects, CleanPath(path))
+	return nil
+}
+
 func (s *MemoryStore) ListObjects(ctx context.Context, prefix string) ([]ObjectInfo, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

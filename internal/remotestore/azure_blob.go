@@ -116,6 +116,22 @@ func (s *AzureBlobStore) WriteObject(ctx context.Context, path string, content [
 	return requireSuccess(resp)
 }
 
+func (s *AzureBlobStore) DeleteObject(ctx context.Context, path string) error {
+	req, err := s.request(ctx, http.MethodDelete, path, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := s.client().Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	return requireSuccess(resp)
+}
+
 func (s *AzureBlobStore) ListObjects(ctx context.Context, prefix string) ([]ObjectInfo, error) {
 	token, err := s.TokenProvider.Token(ctx)
 	if err != nil {

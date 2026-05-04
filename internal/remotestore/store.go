@@ -13,6 +13,7 @@ type Store interface {
 	WriteManifest(ctx context.Context, manifest syncstate.Manifest) error
 	ReadObject(ctx context.Context, path string) ([]byte, bool, error)
 	WriteObject(ctx context.Context, path string, content []byte) error
+	DeleteObject(ctx context.Context, path string) error
 	ListObjects(ctx context.Context, prefix string) ([]ObjectInfo, error)
 }
 

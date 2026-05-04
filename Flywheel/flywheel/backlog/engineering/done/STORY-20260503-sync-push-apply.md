@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260503-sync-push-apply
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: done
 - `source`: pm
 - `decision_refs`: [ADR-sync-conflict-behavior, ADR-mcp-operation-surface]
 - `success_metric`: Cairn can safely publish local-only workspace changes to the remote store and update manifests/state.
@@ -50,6 +50,25 @@
 ## Open Questions
 - Whether v1 should keep deleted remote objects as tombstones or hard-delete blobs.
 
-## Next Step
-- Engineering should implement after dry-run planning and preferably after pull apply.
+## Engineering Handoff
+- Implemented 2026-05-03.
+- Added `syncstate.ApplyPush` for safe local-only push plans.
+- Push apply writes local creates/edits/moves/archives through the remote store adapter.
+- Push apply hard-deletes moved/deleted remote objects through explicit remote delete support.
+- Remote manifest publication happens after object writes/deletes.
+- Local sync state advances only after remote manifest publication succeeds.
+- Added `mcpops.Local.SyncPush` and a CLI `sync push` surface.
 
+## QA Handoff
+- Accepted 2026-05-03.
+- Verified local create/edit object publication.
+- Verified move/archive writes the new object and deletes the previous remote path.
+- Verified delete removes the remote object and publishes an updated manifest.
+- Verified divergence refuses without remote object writes, remote manifest writes, or local state changes.
+- Verified remote manifest publication is the final remote write.
+- Verified object write failure does not publish the manifest or advance sync state.
+- QA fix: push manifest generation now filters Cairn sync metadata before publishing/saving state.
+- Verification: `GOCACHE=/private/tmp/cairn-go-cache go test ./...`
+
+## Next Step
+- Promote `STORY-20260503-remote-index-search-integration`.
