@@ -8,10 +8,7 @@ import (
 )
 
 func (l *Local) SyncStatus(ctx context.Context, _ mcpschema.EmptyRequest) (mcpschema.Envelope[mcpschema.SyncStatusData], error) {
-	status, err := syncstate.StatusReport(ctx, l.Root, syncstate.StatusOptions{
-		WorkspaceID: l.provenance("sync_status").WorkspaceID,
-		Now:         l.Now,
-	})
+	status, err := l.syncStatus(ctx, "sync_status")
 	if err != nil {
 		return mcpschema.Envelope[mcpschema.SyncStatusData]{}, err
 	}
@@ -21,10 +18,7 @@ func (l *Local) SyncStatus(ctx context.Context, _ mcpschema.EmptyRequest) (mcpsc
 }
 
 func (l *Local) SyncDryRun(ctx context.Context, _ mcpschema.SyncRequest) (mcpschema.Envelope[mcpschema.SyncMutationData], error) {
-	status, err := syncstate.StatusReport(ctx, l.Root, syncstate.StatusOptions{
-		WorkspaceID: l.provenance("sync_dry_run").WorkspaceID,
-		Now:         l.Now,
-	})
+	status, err := l.syncStatus(ctx, "sync_dry_run")
 	if err != nil {
 		return mcpschema.Envelope[mcpschema.SyncMutationData]{}, err
 	}
@@ -34,10 +28,7 @@ func (l *Local) SyncDryRun(ctx context.Context, _ mcpschema.SyncRequest) (mcpsch
 }
 
 func (l *Local) SyncPull(ctx context.Context, _ mcpschema.SyncRequest) (mcpschema.Envelope[mcpschema.SyncMutationData], error) {
-	status, err := syncstate.StatusReport(ctx, l.Root, syncstate.StatusOptions{
-		WorkspaceID: l.provenance("sync_pull").WorkspaceID,
-		Now:         l.Now,
-	})
+	status, err := l.syncStatus(ctx, "sync_pull")
 	if err != nil {
 		return mcpschema.Envelope[mcpschema.SyncMutationData]{}, err
 	}
@@ -69,10 +60,7 @@ func (l *Local) SyncPull(ctx context.Context, _ mcpschema.SyncRequest) (mcpschem
 }
 
 func (l *Local) SyncPush(ctx context.Context, _ mcpschema.SyncRequest) (mcpschema.Envelope[mcpschema.SyncMutationData], error) {
-	status, err := syncstate.StatusReport(ctx, l.Root, syncstate.StatusOptions{
-		WorkspaceID: l.provenance("sync_push").WorkspaceID,
-		Now:         l.Now,
-	})
+	status, err := l.syncStatus(ctx, "sync_push")
 	if err != nil {
 		return mcpschema.Envelope[mcpschema.SyncMutationData]{}, err
 	}
@@ -97,6 +85,23 @@ func (l *Local) SyncPush(ctx context.Context, _ mcpschema.SyncRequest) (mcpschem
 		Reason: "Confirm the workspace is clean after push.",
 	}}
 	return envelope, nil
+}
+
+func (l *Local) syncStatus(ctx context.Context, source string) (syncstate.Status, error) {
+	opts := syncstate.StatusOptions{
+		WorkspaceID: l.provenance(source).WorkspaceID,
+		Now:         l.Now,
+	}
+	if l.RemoteStore != nil {
+		manifest, ok, err := l.RemoteStore.ReadManifest(ctx)
+		if err != nil {
+			return syncstate.Status{}, err
+		}
+		if ok {
+			opts.RemoteManifest = &manifest
+		}
+	}
+	return syncstate.StatusReport(ctx, l.Root, opts)
 }
 
 func changedPaths(changes []syncstate.Change) []mcpschema.ChangedPath {

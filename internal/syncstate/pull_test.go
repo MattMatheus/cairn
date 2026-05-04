@@ -2,6 +2,7 @@ package syncstate
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -171,6 +172,49 @@ func TestApplyPullRefusesInvalidRemoteMarkdownBeforeLocalWrites(t *testing.T) {
 	}
 	if string(beforeState) != string(readBytes(t, statePath(root))) {
 		t.Fatalf("validation refusal advanced sync state")
+	}
+}
+
+func TestApplyPullRollsBackEarlierWritesWhenLaterWriteFails(t *testing.T) {
+	root := t.TempDir()
+	originalA := managedDocument("cairn:a", "working", "note", "A")
+	writeFile(t, root, "working/a.md", originalA)
+	base := mustGenerate(t, root)
+	saveBaseAndRemote(t, root, base)
+	beforeState := readBytes(t, statePath(root))
+
+	remoteA := managedDocument("cairn:a", "working", "note", "A Remote")
+	remoteB := managedDocument("cairn:b", "working", "note", "B Remote")
+	remote := manifestWithEntries(base,
+		entryForContent("working/a.md", remoteA, "cairn:a", "working", "note"),
+		entryForContent("working/b.md", remoteB, "cairn:b", "working", "note"),
+	)
+	writeRemoteManifest(t, root, remote)
+	store := newObjectStore()
+	writeRemoteObject(t, store, "working/a.md", remoteA)
+	writeRemoteObject(t, store, "working/b.md", remoteB)
+
+	originalWriteFile := osWriteFile
+	defer func() { osWriteFile = originalWriteFile }()
+	osWriteFile = func(name string, data []byte, perm os.FileMode) error {
+		if strings.HasSuffix(filepath.ToSlash(name), "working/b.md.cairn-pull-tmp") {
+			return errors.New("injected write failure")
+		}
+		return originalWriteFile(name, data, perm)
+	}
+
+	status := mustStatus(t, root)
+	if _, err := ApplyPull(context.Background(), root, status, store, PullOptions{Now: fixedPullTime}); err == nil {
+		t.Fatal("expected injected write failure")
+	}
+	if got := string(readBytes(t, filepath.Join(root, "working", "a.md"))); got != originalA {
+		t.Fatalf("earlier write was not rolled back:\n%s", got)
+	}
+	if _, err := os.Stat(filepath.Join(root, "working", "b.md")); !os.IsNotExist(err) {
+		t.Fatalf("failed create should be absent, stat err=%v", err)
+	}
+	if string(beforeState) != string(readBytes(t, statePath(root))) {
+		t.Fatalf("failed pull advanced sync state")
 	}
 }
 

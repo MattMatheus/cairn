@@ -11,6 +11,12 @@ import (
 	"time"
 )
 
+var (
+	osWriteFile = os.WriteFile
+	osRemove    = os.Remove
+	osRename    = os.Rename
+)
+
 type ObjectReader interface {
 	ReadObject(ctx context.Context, path string) ([]byte, bool, error)
 }
@@ -53,38 +59,43 @@ func ApplyPull(ctx context.Context, root string, status Status, store ObjectRead
 		pulled[change.Path] = pulledObject{entry: entry, content: content}
 	}
 
+	backups, err := backupPullPaths(root, plan.Changes)
+	if err != nil {
+		return plan, err
+	}
 	for _, change := range plan.Changes {
 		if err := ctx.Err(); err != nil {
 			return plan, err
 		}
+		var applyErr error
 		switch change.Type {
 		case ChangeCreate, ChangeEdit:
 			object, ok := pulled[change.Path]
 			if !ok {
 				return plan, fmt.Errorf("remote object %s was not staged", change.Path)
 			}
-			if err := writePulledObject(root, object); err != nil {
-				return plan, err
-			}
+			applyErr = writePulledObject(root, object)
 		case ChangeMove, ChangeArchive:
 			object, ok := pulled[change.Path]
 			if !ok {
 				return plan, fmt.Errorf("remote object %s was not staged", change.Path)
 			}
-			if err := writePulledObject(root, object); err != nil {
-				return plan, err
-			}
+			applyErr = writePulledObject(root, object)
 			if change.PreviousPath != "" && change.PreviousPath != change.Path {
-				if err := removeWorkspacePath(root, change.PreviousPath); err != nil {
-					return plan, err
+				if applyErr == nil {
+					applyErr = removeWorkspacePath(root, change.PreviousPath)
 				}
 			}
 		case ChangeDelete:
-			if err := removeWorkspacePath(root, change.Path); err != nil {
-				return plan, err
-			}
+			applyErr = removeWorkspacePath(root, change.Path)
 		default:
 			return plan, fmt.Errorf("unsupported pull change type %q", change.Type)
+		}
+		if applyErr != nil {
+			if rollbackErr := rollbackPullPaths(root, backups); rollbackErr != nil {
+				return plan, fmt.Errorf("%w; rollback failed: %v", applyErr, rollbackErr)
+			}
+			return plan, applyErr
 		}
 	}
 
@@ -136,7 +147,15 @@ func writePulledObject(root string, object pulledObject) error {
 	if err := os.MkdirAll(filepath.Dir(absolutePath), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(absolutePath, object.content, 0o644)
+	tempPath := absolutePath + ".cairn-pull-tmp"
+	if err := osWriteFile(tempPath, object.content, 0o644); err != nil {
+		return err
+	}
+	if err := osRename(tempPath, absolutePath); err != nil {
+		_ = osRemove(tempPath)
+		return err
+	}
+	return nil
 }
 
 func removeWorkspacePath(root string, relativePath string) error {
@@ -144,8 +163,64 @@ func removeWorkspacePath(root string, relativePath string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.Remove(absolutePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := osRemove(absolutePath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
+	}
+	return nil
+}
+
+type pathBackup struct {
+	content []byte
+	exists  bool
+}
+
+func backupPullPaths(root string, changes []Change) (map[string]pathBackup, error) {
+	paths := map[string]bool{}
+	for _, change := range changes {
+		if change.Path != "" {
+			paths[change.Path] = true
+		}
+		if change.PreviousPath != "" {
+			paths[change.PreviousPath] = true
+		}
+	}
+	backups := map[string]pathBackup{}
+	for path := range paths {
+		absolutePath, err := workspacePath(root, path)
+		if err != nil {
+			return nil, err
+		}
+		content, err := os.ReadFile(absolutePath)
+		if errors.Is(err, os.ErrNotExist) {
+			backups[path] = pathBackup{}
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		backups[path] = pathBackup{content: content, exists: true}
+	}
+	return backups, nil
+}
+
+func rollbackPullPaths(root string, backups map[string]pathBackup) error {
+	for path, backup := range backups {
+		absolutePath, err := workspacePath(root, path)
+		if err != nil {
+			return err
+		}
+		if backup.exists {
+			if err := os.MkdirAll(filepath.Dir(absolutePath), 0o755); err != nil {
+				return err
+			}
+			if err := osWriteFile(absolutePath, backup.content, 0o644); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := osRemove(absolutePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
 	}
 	return nil
 }

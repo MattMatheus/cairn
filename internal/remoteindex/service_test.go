@@ -70,6 +70,31 @@ func TestServiceRefreshDryRunDoesNotMarkFresh(t *testing.T) {
 	}
 }
 
+func TestServiceHonorsCairnignoreForRefreshAndSearch(t *testing.T) {
+	root := t.TempDir()
+	writeServiceFile(t, root, ".cairnignore", "ignored/\nsecret.md\n")
+	writeServiceFile(t, root, "runbooks/visible.md", managedServiceMarkdown("cairn:visible", "Visible", "visible", "runbook", "canonical", "shared auth context"))
+	writeServiceFile(t, root, "ignored/hidden.md", managedServiceMarkdown("cairn:hidden", "Hidden", "hidden", "note", "working", "secret auth context"))
+	writeServiceFile(t, root, "working/secret.md", managedServiceMarkdown("cairn:secret", "Secret", "secret", "note", "working", "secret auth context"))
+	service := NewService(root)
+	handler := service.Handler()
+
+	var refresh RefreshResponse
+	postJSON(t, handler, "/index/refresh", RefreshRequest{WorkspaceID: "pod-1"}, &refresh)
+
+	var status StatusResponse
+	postJSON(t, handler, "/index/status", StatusRequest{WorkspaceID: "pod-1"}, &status)
+	if status.IndexedCount != 1 {
+		t.Fatalf("ignored documents should not be counted: %#v", status)
+	}
+
+	var search SearchResponse
+	postJSON(t, handler, "/search", SearchRequest{WorkspaceID: "pod-1", Query: "auth", Limit: 10}, &search)
+	if len(search.Results) != 1 || search.Results[0].Path != "runbooks/visible.md" {
+		t.Fatalf("ignored documents should not be returned: %#v", search.Results)
+	}
+}
+
 func postJSON(t *testing.T, handler http.Handler, path string, in any, out any) {
 	t.Helper()
 	body, err := json.Marshal(in)

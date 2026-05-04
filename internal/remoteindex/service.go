@@ -107,8 +107,12 @@ func countManagedMarkdown(root string) (int, error) {
 
 func searchManagedMarkdown(root string, query string, limit int) ([]SearchResult, error) {
 	needle := strings.ToLower(strings.TrimSpace(query))
+	ignore, err := loadIgnore(root)
+	if err != nil {
+		return nil, err
+	}
 	var results []SearchResult
-	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+	err = filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -124,6 +128,12 @@ func searchManagedMarkdown(root string, query string, limit int) ([]SearchResult
 			if rel == ".git" || rel == ".cairn" {
 				return filepath.SkipDir
 			}
+			if ignore.matches(rel, true) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if ignore.matches(rel, false) {
 			return nil
 		}
 		if !strings.EqualFold(filepath.Ext(rel), ".md") {

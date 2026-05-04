@@ -109,6 +109,10 @@ func (c Config) ManagedFolderSet() map[string]struct{} {
 
 func parseConfig(content string, cfg Config) Config {
 	section := ""
+	profile := ""
+	podRemoteEnabled := false
+	var podRemoteSync RemoteSyncConfig
+	var podRemoteIndex RemoteIndexConfig
 	for _, raw := range strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n") {
 		line := strings.TrimSpace(raw)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -116,6 +120,7 @@ func parseConfig(content string, cfg Config) Config {
 		}
 		if !strings.HasPrefix(raw, " ") && strings.HasSuffix(line, ":") {
 			section = strings.TrimSuffix(line, ":")
+			profile = ""
 			continue
 		}
 		if !strings.HasPrefix(raw, " ") {
@@ -132,6 +137,42 @@ func parseConfig(content string, cfg Config) Config {
 				}
 			}
 			section = ""
+			profile = ""
+			continue
+		}
+		if section == "profiles" {
+			indent := leadingSpaces(raw)
+			if indent == 2 && strings.HasSuffix(line, ":") {
+				profile = strings.TrimSuffix(line, ":")
+				continue
+			}
+			if indent >= 4 && profile == "pod-remote" {
+				key, value, ok := strings.Cut(line, ":")
+				if !ok {
+					continue
+				}
+				value = unquoteConfig(strings.TrimSpace(value))
+				switch strings.TrimSpace(key) {
+				case "enabled":
+					podRemoteEnabled = value == "true"
+				case "provider":
+					podRemoteSync.Provider = value
+				case "account":
+					podRemoteSync.Account = value
+				case "endpoint":
+					podRemoteSync.Endpoint = value
+				case "container":
+					podRemoteSync.Container = value
+				case "prefix":
+					podRemoteSync.Prefix = cleanConfigPath(value)
+				case "url":
+					podRemoteIndex.URL = value
+				case "audience":
+					podRemoteIndex.Audience = value
+				case "tenant_id":
+					podRemoteIndex.TenantID = value
+				}
+			}
 			continue
 		}
 		switch section {
@@ -189,8 +230,42 @@ func parseConfig(content string, cfg Config) Config {
 			}
 		}
 	}
+	if podRemoteEnabled {
+		mergeRemoteSync(&cfg.RemoteSync, podRemoteSync)
+		mergeRemoteIndex(&cfg.RemoteIndex, podRemoteIndex)
+	}
 	sort.Strings(cfg.ManagedFolders)
 	return cfg
+}
+
+func mergeRemoteSync(target *RemoteSyncConfig, profile RemoteSyncConfig) {
+	if profile.Provider != "" {
+		target.Provider = profile.Provider
+	}
+	if profile.Account != "" {
+		target.Account = profile.Account
+	}
+	if profile.Endpoint != "" {
+		target.Endpoint = profile.Endpoint
+	}
+	if profile.Container != "" {
+		target.Container = profile.Container
+	}
+	if profile.Prefix != "" {
+		target.Prefix = profile.Prefix
+	}
+}
+
+func mergeRemoteIndex(target *RemoteIndexConfig, profile RemoteIndexConfig) {
+	if profile.URL != "" {
+		target.URL = profile.URL
+	}
+	if profile.Audience != "" {
+		target.Audience = profile.Audience
+	}
+	if profile.TenantID != "" {
+		target.TenantID = profile.TenantID
+	}
 }
 
 func validateConfigFile(root string) []ConfigFinding {
@@ -206,6 +281,9 @@ func validateConfigFile(root string) []ConfigFinding {
 	var findings []ConfigFinding
 	seen := map[string]bool{}
 	section := ""
+	profile := ""
+	podRemoteEnabled := false
+	podRemoteFields := map[string]string{}
 	defaultTypes := DefaultConfig().DocumentTypes
 	managed := map[string]bool{}
 	for index, raw := range lines {
@@ -223,6 +301,7 @@ func validateConfigFile(root string) []ConfigFinding {
 				seen[name] = true
 				if isConfigSection(name) {
 					section = name
+					profile = ""
 					continue
 				}
 				section = ""
@@ -244,6 +323,7 @@ func validateConfigFile(root string) []ConfigFinding {
 			key = strings.TrimSpace(key)
 			seen[key] = true
 			section = ""
+			profile = ""
 			switch key {
 			case "schema_version":
 				if strings.TrimSpace(value) != "1" {
@@ -255,6 +335,46 @@ func validateConfigFile(root string) []ConfigFinding {
 				}
 			case "managed_folders", "document_types", "remote_sync", "remote_index", "profiles", "required_skills":
 				findings = append(findings, configFinding("warning", lineNo, "section should be declared without an inline value"))
+			}
+			continue
+		}
+		if section == "profiles" {
+			indent := leadingSpaces(raw)
+			if indent == 2 && strings.HasSuffix(line, ":") {
+				profile = strings.TrimSuffix(line, ":")
+				if profile != "local" && profile != "pod-remote" {
+					findings = append(findings, configFinding("warning", lineNo, "unknown profile "+profile))
+				}
+				continue
+			}
+			if indent < 4 || profile == "" {
+				findings = append(findings, configFinding("error", lineNo, "profiles entries must be nested under a profile name"))
+				continue
+			}
+			key, value, ok := strings.Cut(line, ":")
+			if !ok || strings.TrimSpace(key) == "" {
+				findings = append(findings, configFinding("error", lineNo, "profile entry is malformed"))
+				continue
+			}
+			key = strings.TrimSpace(key)
+			value = unquoteConfig(strings.TrimSpace(value))
+			switch key {
+			case "enabled":
+				if value != "true" && value != "false" {
+					findings = append(findings, configFinding("error", lineNo, "profile enabled must be true or false"))
+				}
+				if profile == "pod-remote" && value == "true" {
+					podRemoteEnabled = true
+				}
+			case "provider", "account", "endpoint", "container", "prefix", "url", "audience", "tenant_id":
+				if profile == "pod-remote" {
+					podRemoteFields[key] = value
+				}
+				if key == "provider" && value != "" && value != "azure_blob" {
+					findings = append(findings, configFinding("warning", lineNo, "unknown remote_sync provider "+value))
+				}
+			default:
+				findings = append(findings, configFinding("warning", lineNo, "unknown profile key "+key))
 			}
 			continue
 		}
@@ -319,6 +439,17 @@ func validateConfigFile(root string) []ConfigFinding {
 			findings = append(findings, configFinding("error", lineNo, "indented config entry is outside a section"))
 		}
 	}
+	if podRemoteEnabled {
+		if podRemoteFields["provider"] == "" {
+			findings = append(findings, configFinding("error", 0, "pod-remote provider is required when enabled"))
+		}
+		if podRemoteFields["account"] == "" && podRemoteFields["endpoint"] == "" {
+			findings = append(findings, configFinding("error", 0, "pod-remote account or endpoint is required when enabled"))
+		}
+		if podRemoteFields["container"] == "" {
+			findings = append(findings, configFinding("error", 0, "pod-remote container is required when enabled"))
+		}
+	}
 	for _, required := range []string{"schema_version", "workspace_id", "managed_folders", "document_types"} {
 		if !seen[required] {
 			findings = append(findings, ConfigFinding{Path: ".cairn/config.yaml", Severity: "error", Message: "missing required config key " + required})
@@ -337,6 +468,17 @@ func isConfigSection(name string) bool {
 	default:
 		return false
 	}
+}
+
+func leadingSpaces(value string) int {
+	count := 0
+	for _, r := range value {
+		if r != ' ' {
+			break
+		}
+		count++
+	}
+	return count
 }
 
 func configFinding(severity string, line int, message string) ConfigFinding {
