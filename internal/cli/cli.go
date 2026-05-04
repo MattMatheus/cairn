@@ -276,6 +276,7 @@ func runIndex(ctx context.Context, args []string, opts options, stdout io.Writer
 		if err != nil {
 			return err
 		}
+		fmt.Fprintf(stdout, "Local index refreshed: %t\n", envelope.Data.LocalRefreshed)
 		fmt.Fprintf(stdout, "Remote index refresh accepted: %t\n", envelope.Data.Accepted)
 		fmt.Fprintf(stdout, "Remote index refreshed: %t\n", envelope.Data.RemoteRefreshed)
 		if envelope.Data.JobID != "" {

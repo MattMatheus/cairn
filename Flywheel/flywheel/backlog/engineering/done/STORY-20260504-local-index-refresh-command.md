@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260504-local-index-refresh-command
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: done
 - `source`: planning
 - `decision_refs`: [ADR-indexing-query-boundary, ADR-mcp-operation-surface]
 - `success_metric`: Users and agents can refresh Cairn's local metadata index through the same operation surface as remote index refresh.
@@ -49,5 +49,20 @@
 ## Open Questions
 - Whether local refresh should also run automatically after capture/promote/archive.
 
+## Engineering Handoff
+- Implemented 2026-05-04.
+- `IndexRefresh` now rebuilds the local metadata index when no remote indexer is configured.
+- Local-only refresh reports `local_refreshed: true`, changed path `.cairn/index/cairn.db`, and search next-step guidance.
+- Remote-configured refresh behavior remains the remote accepted/refreshed path.
+- CLI `cairn index refresh` now prints local and remote refresh states distinctly.
+
+## QA Handoff
+- Accepted 2026-05-04.
+- Verified local-only refresh indexes managed markdown into `.cairn/index/cairn.db`.
+- Verified local refresh response includes changed path and `local_refreshed: true`.
+- Verified remote-configured refresh path still reports accepted/refreshed remote state.
+- Verified CLI output distinguishes local and remote refresh.
+- Verification: `GOCACHE=/private/tmp/cairn-go-cache go test ./...`
+
 ## Next Step
-- Engineering should implement early in the next batch because it improves day-to-day usability.
+- Promote `STORY-20260504-sync-validation-gate`.

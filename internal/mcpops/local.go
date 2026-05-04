@@ -2,6 +2,7 @@ package mcpops
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -143,23 +144,24 @@ func (l *Local) IndexStatus(_ context.Context, _ mcpschema.IndexStatusRequest) (
 
 func (l *Local) IndexRefresh(ctx context.Context, req mcpschema.IndexRefreshRequest) (mcpschema.Envelope[mcpschema.IndexRefreshData], error) {
 	if l.RemoteIndex == nil {
+		report, err := l.Index.IndexWorkspace(ctx, l.Root)
+		if err != nil {
+			return mcpschema.Envelope[mcpschema.IndexRefreshData]{}, err
+		}
 		return mcpschema.Envelope[mcpschema.IndexRefreshData]{
-			OK:   false,
-			Data: mcpschema.IndexRefreshData{},
-			Warnings: []mcpschema.Warning{{
-				Code:    mcpschema.WarningRemoteService,
-				Message: "remote indexer is unavailable in local profile",
-			}},
-			Unavailable: []mcpschema.UnavailableMode{{
-				Mode:      "remote",
-				Reason:    mcpschema.WarningRemoteService,
-				Message:   "remote indexer is not configured",
-				Retryable: false,
-			}},
+			OK: true,
+			Data: mcpschema.IndexRefreshData{
+				LocalRefreshed: true,
+				MutationResult: mcpschema.MutationResult{ChangedPaths: []mcpschema.ChangedPath{{
+					Path: ".cairn/index/cairn.db",
+					Kind: "updated",
+				}}},
+				Message: fmt.Sprintf("indexed %d managed documents", len(report.Indexed)),
+			},
 			NextSteps: []mcpschema.NextStep{{
-				Action: string(mcpschema.ToolIndexStatus),
-				Label:  "Check index availability",
-				Reason: "Configure a remote indexer before requesting refresh.",
+				Action: string(mcpschema.ToolSearchContext),
+				Label:  "Search local context",
+				Reason: "Local metadata index refresh completed.",
 			}},
 			Provenance: l.provenance("index_refresh"),
 		}, nil

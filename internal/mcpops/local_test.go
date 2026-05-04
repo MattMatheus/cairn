@@ -152,14 +152,43 @@ func TestIndexRefreshReportsAcceptedAndRefreshedRemoteResponses(t *testing.T) {
 	}
 }
 
+func TestIndexRefreshRebuildsLocalIndexWhenRemoteIsNotConfigured(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "runbooks/local.md", managedMarkdown("cairn:local", "Local Runbook", "local-runbook", "runbook", "canonical", []string{"local"}, []string{"codex"}, []string{"matt"}, "capture", "2026-05-03T12:00:00Z", "Local body."))
+	index, err := localindex.Open(root)
+	if err != nil {
+		t.Fatalf("Open returned error: %v", err)
+	}
+	defer index.Close()
+	ops := &Local{Root: root, Index: index}
+
+	envelope, err := ops.IndexRefresh(context.Background(), mcpschema.IndexRefreshRequest{})
+	if err != nil {
+		t.Fatalf("IndexRefresh returned error: %v", err)
+	}
+	if !envelope.OK || !envelope.Data.LocalRefreshed || envelope.Data.RemoteRefreshed {
+		t.Fatalf("unexpected local refresh envelope: %#v", envelope)
+	}
+	if len(envelope.Data.ChangedPaths) != 1 || envelope.Data.ChangedPaths[0].Path != ".cairn/index/cairn.db" {
+		t.Fatalf("expected local index changed path: %#v", envelope.Data.ChangedPaths)
+	}
+	results, err := index.Query(context.Background(), localindex.Query{Text: "Local", Limit: 10})
+	if err != nil {
+		t.Fatalf("Query returned error: %v", err)
+	}
+	if len(results) != 1 || results[0].Path != "runbooks/local.md" {
+		t.Fatalf("expected refreshed local index result: %#v", results)
+	}
+}
+
 func TestIndexRefreshUnavailableAndFailureDegrade(t *testing.T) {
 	ops := newFixtureOps(t)
 	unavailable, err := ops.IndexRefresh(context.Background(), mcpschema.IndexRefreshRequest{})
 	if err != nil {
 		t.Fatalf("IndexRefresh unavailable returned error: %v", err)
 	}
-	if unavailable.OK || len(unavailable.Warnings) != 1 || len(unavailable.Unavailable) != 1 || len(unavailable.NextSteps) != 1 {
-		t.Fatalf("expected unavailable degradation: %#v", unavailable)
+	if !unavailable.OK || !unavailable.Data.LocalRefreshed {
+		t.Fatalf("expected local refresh without remote configured: %#v", unavailable)
 	}
 
 	ops.RemoteIndex = failingRemoteIndex{}

@@ -77,6 +77,14 @@ func TestRunPromoteArchiveAndIndexStatus(t *testing.T) {
 		t.Fatalf("unexpected index status stdout:\n%s", stdout)
 	}
 
+	stdout, stderr, code = run(t, "--root", root, "index", "refresh")
+	if code != 0 {
+		t.Fatalf("index refresh code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Local index refreshed: true") || !strings.Contains(stdout, "Remote index refreshed: false") {
+		t.Fatalf("unexpected index refresh stdout:\n%s", stdout)
+	}
+
 	stdout, stderr, code = run(t, "--root", root, "sync", "status")
 	if code != 0 {
 		t.Fatalf("sync status code=%d stderr=%s", code, stderr)
