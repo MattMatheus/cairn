@@ -112,6 +112,80 @@ func TestIndexStatusAndBootstrapAreLocalOnly(t *testing.T) {
 	}
 }
 
+func TestIndexRefreshReportsAcceptedAndRefreshedRemoteResponses(t *testing.T) {
+	ops := newFixtureOps(t)
+	ops.RemoteIndex = &remoteindex.FakeClient{
+		RefreshResponse: remoteindex.RefreshResponse{
+			Accepted:  true,
+			Refreshed: false,
+			JobID:     "job-1",
+			Message:   "queued",
+		},
+	}
+	accepted, err := ops.IndexRefresh(context.Background(), mcpschema.IndexRefreshRequest{})
+	if err != nil {
+		t.Fatalf("IndexRefresh accepted returned error: %v", err)
+	}
+	if !accepted.OK || !accepted.Data.Accepted || accepted.Data.RemoteRefreshed || accepted.Data.JobID != "job-1" {
+		t.Fatalf("unexpected accepted refresh envelope: %#v", accepted)
+	}
+	if len(accepted.NextSteps) != 1 || accepted.NextSteps[0].Action != string(mcpschema.ToolIndexStatus) {
+		t.Fatalf("accepted async refresh should suggest status: %#v", accepted.NextSteps)
+	}
+
+	ops.RemoteIndex = &remoteindex.FakeClient{
+		RefreshResponse: remoteindex.RefreshResponse{
+			Accepted:  true,
+			Refreshed: true,
+			Message:   "done",
+		},
+	}
+	refreshed, err := ops.IndexRefresh(context.Background(), mcpschema.IndexRefreshRequest{})
+	if err != nil {
+		t.Fatalf("IndexRefresh refreshed returned error: %v", err)
+	}
+	if !refreshed.OK || !refreshed.Data.Accepted || !refreshed.Data.RemoteRefreshed {
+		t.Fatalf("unexpected refreshed envelope: %#v", refreshed)
+	}
+	if len(refreshed.Data.ChangedPaths) == 0 || len(refreshed.NextSteps) != 1 || refreshed.NextSteps[0].Action != string(mcpschema.ToolSearchContext) {
+		t.Fatalf("refreshed response should include changed paths and search next step: %#v", refreshed)
+	}
+}
+
+func TestIndexRefreshUnavailableAndFailureDegrade(t *testing.T) {
+	ops := newFixtureOps(t)
+	unavailable, err := ops.IndexRefresh(context.Background(), mcpschema.IndexRefreshRequest{})
+	if err != nil {
+		t.Fatalf("IndexRefresh unavailable returned error: %v", err)
+	}
+	if unavailable.OK || len(unavailable.Warnings) != 1 || len(unavailable.Unavailable) != 1 || len(unavailable.NextSteps) != 1 {
+		t.Fatalf("expected unavailable degradation: %#v", unavailable)
+	}
+
+	ops.RemoteIndex = failingRemoteIndex{}
+	failed, err := ops.IndexRefresh(context.Background(), mcpschema.IndexRefreshRequest{})
+	if err != nil {
+		t.Fatalf("IndexRefresh failure returned error: %v", err)
+	}
+	if failed.OK || len(failed.Warnings) != 1 || len(failed.Unavailable) != 1 || !failed.Unavailable[0].Retryable {
+		t.Fatalf("expected retryable failure degradation: %#v", failed)
+	}
+}
+
+type failingRemoteIndex struct{}
+
+func (failingRemoteIndex) Status(context.Context, remoteindex.StatusRequest) (remoteindex.StatusResponse, error) {
+	return remoteindex.StatusResponse{}, context.Canceled
+}
+
+func (failingRemoteIndex) Refresh(context.Context, remoteindex.RefreshRequest) (remoteindex.RefreshResponse, error) {
+	return remoteindex.RefreshResponse{}, context.Canceled
+}
+
+func (failingRemoteIndex) Search(context.Context, remoteindex.SearchRequest) (remoteindex.SearchResponse, error) {
+	return remoteindex.SearchResponse{}, context.Canceled
+}
+
 func newFixtureOps(t *testing.T) *Local {
 	t.Helper()
 	root := t.TempDir()

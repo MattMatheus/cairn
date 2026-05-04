@@ -58,6 +58,13 @@ func (l *Local) SyncPull(ctx context.Context, _ mcpschema.SyncRequest) (mcpschem
 		Label:  "Run sync status",
 		Reason: "Confirm the workspace is clean after pull.",
 	}}
+	if l.RemoteIndex != nil {
+		envelope.NextSteps = append(envelope.NextSteps, mcpschema.NextStep{
+			Action: string(mcpschema.ToolIndexRefresh),
+			Label:  "Refresh remote index",
+			Reason: "Pulled workspace changes may need remote index refresh.",
+		})
+	}
 	return envelope, nil
 }
 

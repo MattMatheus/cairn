@@ -263,14 +263,36 @@ func runSearch(ctx context.Context, args []string, opts options, stdout io.Write
 }
 
 func runIndex(ctx context.Context, args []string, opts options, stdout io.Writer) error {
-	if len(args) == 0 || args[0] != "status" {
-		return fmt.Errorf("usage: cairn index status")
+	if len(args) == 0 {
+		return fmt.Errorf("usage: cairn index status|refresh")
 	}
 	local, err := mcpops.OpenLocal(opts.root)
 	if err != nil {
 		return err
 	}
 	defer local.Close()
+	if args[0] == "refresh" {
+		envelope, err := local.IndexRefresh(ctx, mcpschema.IndexRefreshRequest{})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "Remote index refresh accepted: %t\n", envelope.Data.Accepted)
+		fmt.Fprintf(stdout, "Remote index refreshed: %t\n", envelope.Data.RemoteRefreshed)
+		if envelope.Data.JobID != "" {
+			fmt.Fprintf(stdout, "Job id: %s\n", envelope.Data.JobID)
+		}
+		if envelope.Data.Message != "" {
+			fmt.Fprintf(stdout, "Message: %s\n", envelope.Data.Message)
+		}
+		printWarnings(stdout, envelope.Warnings)
+		for _, step := range envelope.NextSteps {
+			fmt.Fprintf(stdout, "Next: %s\n", step.Label)
+		}
+		return nil
+	}
+	if args[0] != "status" {
+		return fmt.Errorf("usage: cairn index status|refresh")
+	}
 	envelope, err := local.IndexStatus(ctx, mcpschema.IndexStatusRequest{})
 	if err != nil {
 		return err

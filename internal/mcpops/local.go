@@ -141,6 +141,86 @@ func (l *Local) IndexStatus(_ context.Context, _ mcpschema.IndexStatusRequest) (
 	return envelope, nil
 }
 
+func (l *Local) IndexRefresh(ctx context.Context, req mcpschema.IndexRefreshRequest) (mcpschema.Envelope[mcpschema.IndexRefreshData], error) {
+	if l.RemoteIndex == nil {
+		return mcpschema.Envelope[mcpschema.IndexRefreshData]{
+			OK:   false,
+			Data: mcpschema.IndexRefreshData{},
+			Warnings: []mcpschema.Warning{{
+				Code:    mcpschema.WarningRemoteService,
+				Message: "remote indexer is unavailable in local profile",
+			}},
+			Unavailable: []mcpschema.UnavailableMode{{
+				Mode:      "remote",
+				Reason:    mcpschema.WarningRemoteService,
+				Message:   "remote indexer is not configured",
+				Retryable: false,
+			}},
+			NextSteps: []mcpschema.NextStep{{
+				Action: string(mcpschema.ToolIndexStatus),
+				Label:  "Check index availability",
+				Reason: "Configure a remote indexer before requesting refresh.",
+			}},
+			Provenance: l.provenance("index_refresh"),
+		}, nil
+	}
+	response, err := l.RemoteIndex.Refresh(ctx, remoteindex.RefreshRequest{
+		WorkspaceID: l.provenance("index_refresh").WorkspaceID,
+		DryRun:      req.DryRun,
+	})
+	if err != nil {
+		return mcpschema.Envelope[mcpschema.IndexRefreshData]{
+			OK: false,
+			Warnings: []mcpschema.Warning{{
+				Code:    mcpschema.WarningRemoteService,
+				Message: "remote index refresh failed: " + err.Error(),
+			}},
+			Unavailable: []mcpschema.UnavailableMode{{
+				Mode:      "remote",
+				Reason:    mcpschema.WarningRemoteService,
+				Message:   "remote index refresh failed",
+				Retryable: true,
+			}},
+			NextSteps: []mcpschema.NextStep{{
+				Action: string(mcpschema.ToolIndexStatus),
+				Label:  "Check index availability",
+				Reason: "Inspect remote index health before retrying refresh.",
+			}},
+			Provenance: l.provenance("index_refresh"),
+		}, nil
+	}
+	envelope := mcpschema.Envelope[mcpschema.IndexRefreshData]{
+		OK: true,
+		Data: mcpschema.IndexRefreshData{
+			RemoteRefreshed: response.Refreshed,
+			Accepted:        response.Accepted,
+			JobID:           response.JobID,
+			LastRefreshAt:   response.LastRefreshAt,
+			Message:         response.Message,
+			MutationResult: mcpschema.MutationResult{ChangedPaths: []mcpschema.ChangedPath{{
+				Path: ".cairn/index/remote",
+				Kind: "refreshed",
+			}}},
+		},
+		Provenance: l.provenance("index_refresh"),
+	}
+	if response.Accepted && !response.Refreshed {
+		envelope.NextSteps = append(envelope.NextSteps, mcpschema.NextStep{
+			Action: string(mcpschema.ToolIndexStatus),
+			Label:  "Check refresh status",
+			Reason: "The remote indexer accepted the refresh asynchronously.",
+		})
+	}
+	if response.Refreshed {
+		envelope.NextSteps = append(envelope.NextSteps, mcpschema.NextStep{
+			Action: string(mcpschema.ToolSearchContext),
+			Label:  "Search refreshed context",
+			Reason: "Remote index refresh completed.",
+		})
+	}
+	return envelope, nil
+}
+
 func (l *Local) provenance(source string) mcpschema.ResponseProvenance {
 	now := time.Now().UTC()
 	if l.Now != nil {

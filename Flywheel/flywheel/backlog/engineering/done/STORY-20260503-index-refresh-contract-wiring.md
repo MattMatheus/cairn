@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260503-index-refresh-contract-wiring
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: done
 - `source`: pm
 - `decision_refs`: [ADR-indexing-query-boundary, ADR-mcp-operation-surface]
 - `success_metric`: Cairn can request remote index refresh through the stable indexer contract and report accepted/refreshed state.
@@ -49,6 +49,23 @@
 ## Open Questions
 - Whether refresh should be CLI-only until remote deployment exists.
 
-## Next Step
-- PM should schedule near remote search integration.
+## Engineering Handoff
+- Implemented 2026-05-03.
+- Added `mcpops.Local.IndexRefresh` using the configured `remoteindex.Client`.
+- Added `accepted`, `job_id`, `last_refresh_at`, and `message` fields to `IndexRefreshData`.
+- Preserved local-only graceful degradation when no remote indexer is configured.
+- Added retryable degradation for remote refresh failures.
+- Added CLI surface for `cairn index refresh`.
+- Added a `sync pull` next step suggesting remote index refresh when a remote indexer is configured.
 
+## QA Handoff
+- Accepted 2026-05-03.
+- Verified accepted asynchronous refresh reports accepted state and job id.
+- Verified completed refresh reports refreshed state and suggests search.
+- Verified missing remote indexer degrades with warnings, unavailable mode, and next step.
+- Verified failed remote refresh degrades as retryable without throwing.
+- Verified common envelope shape and changed paths are preserved.
+- Verification: `GOCACHE=/private/tmp/cairn-go-cache go test ./...`
+
+## Next Step
+- Promote `STORY-20260503-mcp-mutating-tools-gated`.

@@ -410,6 +410,10 @@ type IndexRefreshRequest struct {
 
 type IndexRefreshData struct {
 	MutationResult
-	LocalRefreshed  bool `json:"local_refreshed"`
-	RemoteRefreshed bool `json:"remote_refreshed"`
+	LocalRefreshed  bool      `json:"local_refreshed"`
+	RemoteRefreshed bool      `json:"remote_refreshed"`
+	Accepted        bool      `json:"accepted"`
+	JobID           string    `json:"job_id,omitempty"`
+	LastRefreshAt   time.Time `json:"last_refresh_at,omitempty"`
+	Message         string    `json:"message,omitempty"`
 }
