@@ -119,6 +119,50 @@ func TestApplyPushDoesNotPublishManifestOrAdvanceStateWhenObjectWriteFails(t *te
 	}
 }
 
+func TestApplyPushRefusesInvalidManagedMarkdownBeforeRemoteWrites(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "working/a.md", managedDocument("cairn:a", "working", "note", "A"))
+	base := mustGenerate(t, root)
+	saveBaseAndRemote(t, root, base)
+	writeFile(t, root, "working/bad.md", "# Missing frontmatter\n")
+	beforeState := readBytes(t, statePath(root))
+
+	store := newPushStore()
+	status := mustStatus(t, root)
+	_, err := ApplyPush(context.Background(), root, status, store, PushOptions{WorkspaceID: "pod-1", Now: fixedPullTime})
+	if err == nil {
+		t.Fatalf("expected validation refusal")
+	}
+	if _, ok := err.(ValidationError); !ok {
+		t.Fatalf("expected ValidationError, got %T %v", err, err)
+	}
+	if len(store.operations) != 0 {
+		t.Fatalf("validation refusal wrote remote operations: %#v", store.operations)
+	}
+	if string(beforeState) != string(readBytes(t, statePath(root))) {
+		t.Fatalf("validation refusal advanced sync state")
+	}
+}
+
+func TestApplyPushIgnoresIgnoredInvalidMarkdown(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, ".cairnignore", "scratch/\n")
+	writeFile(t, root, "working/a.md", managedDocument("cairn:a", "working", "note", "A"))
+	writeFile(t, root, "scratch/bad.md", "# Ignored\n")
+	base := mustGenerate(t, root)
+	saveBaseAndRemote(t, root, base)
+	writeFile(t, root, "working/local.md", managedDocument("cairn:local", "working", "note", "Local"))
+
+	store := newPushStore()
+	status := mustStatus(t, root)
+	if _, err := ApplyPush(context.Background(), root, status, store, PushOptions{WorkspaceID: "pod-1", Now: fixedPullTime}); err != nil {
+		t.Fatalf("ignored invalid markdown should not block push: %v", err)
+	}
+	if _, ok := store.objects["working/local.md"]; !ok {
+		t.Fatalf("expected valid local object to be pushed")
+	}
+}
+
 type pushStore struct {
 	objects         map[string][]byte
 	operations      []string

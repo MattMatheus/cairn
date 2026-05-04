@@ -144,6 +144,36 @@ func TestApplyPullDoesNotRemoveMovedPathWhenObjectMissing(t *testing.T) {
 	}
 }
 
+func TestApplyPullRefusesInvalidRemoteMarkdownBeforeLocalWrites(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "working/a.md", managedDocument("cairn:a", "working", "note", "A"))
+	base := mustGenerate(t, root)
+	saveBaseAndRemote(t, root, base)
+	beforeState := readBytes(t, statePath(root))
+
+	remoteContent := "# Missing frontmatter\n"
+	remote := base
+	remote.Entries = append(remote.Entries, entryForContent("working/remote.md", remoteContent, "", "", ""))
+	writeRemoteManifest(t, root, remote)
+	store := newObjectStore()
+	writeRemoteObject(t, store, "working/remote.md", remoteContent)
+
+	status := mustStatus(t, root)
+	_, err := ApplyPull(context.Background(), root, status, store, PullOptions{Now: fixedPullTime})
+	if err == nil {
+		t.Fatalf("expected validation refusal")
+	}
+	if _, ok := err.(ValidationError); !ok {
+		t.Fatalf("expected ValidationError, got %T %v", err, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "working", "remote.md")); !os.IsNotExist(err) {
+		t.Fatalf("invalid remote object should not be written, stat err=%v", err)
+	}
+	if string(beforeState) != string(readBytes(t, statePath(root))) {
+		t.Fatalf("validation refusal advanced sync state")
+	}
+}
+
 func mustStatus(t *testing.T, root string) Status {
 	t.Helper()
 	status, err := StatusReport(context.Background(), root, StatusOptions{WorkspaceID: "pod-1"})

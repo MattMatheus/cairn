@@ -3,6 +3,7 @@ package syncstate
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -147,7 +148,7 @@ func managedDocument(id string, status string, docType string, title string) str
 id: ` + id + `
 schema_version: 1
 title: ` + title + `
-slug: ` + title + `
+slug: ` + testSlug(title) + `
 type: ` + docType + `
 status: ` + status + `
 created: 2026-05-03T12:00:00Z
@@ -160,6 +161,10 @@ tags: []
 
 # ` + title + `
 `
+}
+
+func testSlug(value string) string {
+	return strings.ToLower(strings.ReplaceAll(value, " ", "-"))
 }
 
 func assertPaths(t *testing.T, entries []Entry, want []string) {

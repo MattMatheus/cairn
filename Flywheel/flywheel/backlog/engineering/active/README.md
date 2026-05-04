@@ -10,7 +10,6 @@ No active engineering stories.
 
 After the active story passes QA, continue through the intake backlog in this rough order:
 
-- Sync validation gate
 - MCP remote mutating tools gated surface
 - Remote profile config client wiring
 - CLI-only purge archived document

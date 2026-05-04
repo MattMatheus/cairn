@@ -33,6 +33,9 @@ func ApplyPush(ctx context.Context, root string, status Status, store ObjectPubl
 		return plan, err
 	}
 	localManifest = statusComparableManifest(localManifest)
+	if err := validateLocalManifest(root, localManifest); err != nil {
+		return plan, err
+	}
 	localByPath := entriesByPath(localManifest.Entries)
 	for _, change := range plan.Changes {
 		if err := ctx.Err(); err != nil {

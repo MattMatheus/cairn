@@ -19,6 +19,11 @@ type PullOptions struct {
 	Now func() time.Time
 }
 
+type pulledObject struct {
+	entry   Entry
+	content []byte
+}
+
 func ApplyPull(ctx context.Context, root string, status Status, store ObjectReader, opts PullOptions) (Plan, error) {
 	if store == nil {
 		return Plan{}, errors.New("remote store is required for sync pull")
@@ -29,25 +34,44 @@ func ApplyPull(ctx context.Context, root string, status Status, store ObjectRead
 	}
 
 	remoteByPath := entriesByPath(status.RemoteManifest.Entries)
+	pulled := map[string]pulledObject{}
+	for _, change := range plan.Changes {
+		if err := ctx.Err(); err != nil {
+			return plan, err
+		}
+		if change.Type == ChangeDelete {
+			continue
+		}
+		entry, ok := remoteByPath[change.Path]
+		if !ok {
+			return plan, fmt.Errorf("remote manifest is missing %s", change.Path)
+		}
+		content, err := readAndValidateRemoteObject(ctx, root, store, entry)
+		if err != nil {
+			return plan, err
+		}
+		pulled[change.Path] = pulledObject{entry: entry, content: content}
+	}
+
 	for _, change := range plan.Changes {
 		if err := ctx.Err(); err != nil {
 			return plan, err
 		}
 		switch change.Type {
 		case ChangeCreate, ChangeEdit:
-			entry, ok := remoteByPath[change.Path]
+			object, ok := pulled[change.Path]
 			if !ok {
-				return plan, fmt.Errorf("remote manifest is missing %s", change.Path)
+				return plan, fmt.Errorf("remote object %s was not staged", change.Path)
 			}
-			if err := pullWrite(ctx, root, store, entry); err != nil {
+			if err := writePulledObject(root, object); err != nil {
 				return plan, err
 			}
 		case ChangeMove, ChangeArchive:
-			entry, ok := remoteByPath[change.Path]
+			object, ok := pulled[change.Path]
 			if !ok {
-				return plan, fmt.Errorf("remote manifest is missing %s", change.Path)
+				return plan, fmt.Errorf("remote object %s was not staged", change.Path)
 			}
-			if err := pullWrite(ctx, root, store, entry); err != nil {
+			if err := writePulledObject(root, object); err != nil {
 				return plan, err
 			}
 			if change.PreviousPath != "" && change.PreviousPath != change.Path {
@@ -87,25 +111,32 @@ func entriesByPath(entries []Entry) map[string]Entry {
 	return out
 }
 
-func pullWrite(ctx context.Context, root string, store ObjectReader, entry Entry) error {
+func readAndValidateRemoteObject(ctx context.Context, root string, store ObjectReader, entry Entry) ([]byte, error) {
 	content, ok, err := store.ReadObject(ctx, entry.Path)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !ok {
-		return fmt.Errorf("remote object %s is missing", entry.Path)
+		return nil, fmt.Errorf("remote object %s is missing", entry.Path)
 	}
 	if entry.Hash != "" && hashBytes(content) != entry.Hash {
-		return fmt.Errorf("remote object %s hash does not match manifest", entry.Path)
+		return nil, fmt.Errorf("remote object %s hash does not match manifest", entry.Path)
 	}
-	absolutePath, err := workspacePath(root, entry.Path)
+	if err := validateRemoteContent(root, entry.Path, content); err != nil {
+		return nil, err
+	}
+	return content, nil
+}
+
+func writePulledObject(root string, object pulledObject) error {
+	absolutePath, err := workspacePath(root, object.entry.Path)
 	if err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(absolutePath), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(absolutePath, content, 0o644)
+	return os.WriteFile(absolutePath, object.content, 0o644)
 }
 
 func removeWorkspacePath(root string, relativePath string) error {

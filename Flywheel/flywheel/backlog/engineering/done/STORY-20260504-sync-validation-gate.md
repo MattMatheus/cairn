@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260504-sync-validation-gate
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: done
 - `source`: planning
 - `decision_refs`: [ADR-document-model-lifecycle, ADR-sync-conflict-behavior]
 - `success_metric`: Sync refuses invalid managed markdown before mutating local or remote state.
@@ -50,5 +50,20 @@
 ## Open Questions
 - Whether pull validation should stage fetched content in memory or temporary files.
 
+## Engineering Handoff
+- Implemented 2026-05-04.
+- Added reusable sync validation findings and `ValidationError`.
+- `sync_push` validates generated local managed markdown manifest before any remote writes.
+- `sync_pull` fetches and validates remote markdown in memory before any local file writes or sync state updates.
+- Ignored files remain outside the sync validation gate through existing manifest generation rules.
+
+## QA Handoff
+- Accepted 2026-05-04.
+- Verified invalid local managed markdown blocks push before remote writes.
+- Verified invalid remote managed markdown blocks pull before local writes/state updates.
+- Verified validation refusals return actionable path/message details.
+- Verified ignored invalid markdown does not block valid sync changes.
+- Verification: `GOCACHE=/private/tmp/cairn-go-cache go test ./...`
+
 ## Next Step
-- Engineering should implement before exposing sync mutations broadly to agents.
+- Promote `STORY-20260504-mcp-remote-mutating-tools-gated`.
