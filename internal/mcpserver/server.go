@@ -17,6 +17,8 @@ type Server struct {
 	tools map[mcpschema.ToolName]Tool
 }
 
+type Option func(*Server)
+
 type Tool struct {
 	Name        mcpschema.ToolName `json:"name"`
 	Description string             `json:"description"`
@@ -24,10 +26,19 @@ type Tool struct {
 	handler     func(context.Context, json.RawMessage) (any, error)
 }
 
-func New(local *mcpops.Local) *Server {
+func New(local *mcpops.Local, opts ...Option) *Server {
 	server := &Server{local: local, tools: map[mcpschema.ToolName]Tool{}}
 	server.registerReadOnlyTools()
+	for _, opt := range opts {
+		opt(server)
+	}
 	return server
+}
+
+func WithLocalWrites() Option {
+	return func(s *Server) {
+		s.registerLocalWriteTools()
+	}
 }
 
 func (s *Server) Tools() []Tool {
@@ -44,7 +55,7 @@ func (s *Server) Tools() []Tool {
 func (s *Server) CallTool(ctx context.Context, name mcpschema.ToolName, arguments json.RawMessage) (any, error) {
 	tool, ok := s.tools[name]
 	if !ok {
-		return nil, fmt.Errorf("unknown read-only MCP tool %q", name)
+		return nil, fmt.Errorf("unknown MCP tool %q", name)
 	}
 	return tool.handler(ctx, arguments)
 }
@@ -170,6 +181,46 @@ func (s *Server) registerReadOnlyTools() {
 			return nil, err
 		}
 		return s.local.ReadDocument(ctx, req)
+	})
+}
+
+func (s *Server) registerLocalWriteTools() {
+	s.register(mcpschema.ToolCaptureNote, "Capture agent-authored markdown under agents/{actor}.", objectSchema(map[string]any{
+		"actor":   map[string]any{"type": "string"},
+		"title":   map[string]any{"type": "string"},
+		"body":    map[string]any{"type": "string"},
+		"type":    map[string]any{"type": "string"},
+		"authors": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+		"tags":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+	}), func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var req mcpschema.CaptureNoteRequest
+		if err := decode(raw, &req); err != nil {
+			return nil, err
+		}
+		return s.local.CaptureNote(ctx, req)
+	})
+	s.register(mcpschema.ToolPromoteDocument, "Promote an existing document to a type/status/destination.", objectSchema(map[string]any{
+		"id":     map[string]any{"type": "string"},
+		"path":   map[string]any{"type": "string"},
+		"type":   map[string]any{"type": "string"},
+		"status": map[string]any{"type": "string"},
+	}), func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var req mcpschema.PromoteDocumentRequest
+		if err := decode(raw, &req); err != nil {
+			return nil, err
+		}
+		return s.local.PromoteDocument(ctx, req)
+	})
+	s.register(mcpschema.ToolArchiveDocument, "Archive a document without hard deletion.", objectSchema(map[string]any{
+		"id":     map[string]any{"type": "string"},
+		"path":   map[string]any{"type": "string"},
+		"reason": map[string]any{"type": "string"},
+	}), func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var req mcpschema.ArchiveDocumentRequest
+		if err := decode(raw, &req); err != nil {
+			return nil, err
+		}
+		return s.local.ArchiveDocument(ctx, req)
 	})
 }
 

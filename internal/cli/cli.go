@@ -380,19 +380,26 @@ func newFlagSet(name string) *flag.FlagSet {
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: cairn [--root DIR] <command> [options]")
-	fmt.Fprintln(w, "commands: init, capture, promote, archive, validate, search, index status, sync status, mcp readonly")
+	fmt.Fprintln(w, "commands: init, capture, promote, archive, validate, search, index status, sync status, mcp readonly|local-writes")
 }
 
 func runMCP(ctx context.Context, args []string, opts options, stdin io.Reader, stdout io.Writer) error {
-	if len(args) == 0 || args[0] != "readonly" {
-		return fmt.Errorf("usage: cairn mcp readonly")
+	if len(args) == 0 {
+		return fmt.Errorf("usage: cairn mcp readonly|local-writes")
 	}
 	local, err := mcpops.OpenLocal(opts.root)
 	if err != nil {
 		return err
 	}
 	defer local.Close()
-	return mcpserver.New(local).Serve(ctx, stdin, stdout)
+	switch args[0] {
+	case "readonly":
+		return mcpserver.New(local).Serve(ctx, stdin, stdout)
+	case "local-writes":
+		return mcpserver.New(local, mcpserver.WithLocalWrites()).Serve(ctx, stdin, stdout)
+	default:
+		return fmt.Errorf("usage: cairn mcp readonly|local-writes")
+	}
 }
 
 func runSync(ctx context.Context, args []string, opts options, stdout io.Writer) error {

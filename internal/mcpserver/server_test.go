@@ -38,6 +38,8 @@ func TestServerRegistersReadOnlyToolsOnly(t *testing.T) {
 		mcpschema.ToolCaptureNote,
 		mcpschema.ToolPromoteDocument,
 		mcpschema.ToolArchiveDocument,
+		mcpschema.ToolName("delete_document"),
+		mcpschema.ToolName("purge_document"),
 		mcpschema.ToolSyncPull,
 		mcpschema.ToolSyncPush,
 		mcpschema.ToolIndexRefresh,
@@ -46,6 +48,55 @@ func TestServerRegistersReadOnlyToolsOnly(t *testing.T) {
 		if _, err := server.CallTool(context.Background(), name, nil); err == nil {
 			t.Fatalf("forbidden tool %s was callable", name)
 		}
+	}
+}
+
+func TestServerRegistersLocalWriteToolsOnlyWhenEnabled(t *testing.T) {
+	server := New(&mcpops.Local{Root: t.TempDir()}, WithLocalWrites())
+	names := map[mcpschema.ToolName]bool{}
+	for _, tool := range server.Tools() {
+		names[tool.Name] = true
+	}
+	for _, name := range []mcpschema.ToolName{
+		mcpschema.ToolCaptureNote,
+		mcpschema.ToolPromoteDocument,
+		mcpschema.ToolArchiveDocument,
+	} {
+		if !names[name] {
+			t.Fatalf("write-enabled server missing %s", name)
+		}
+	}
+	for _, name := range []mcpschema.ToolName{
+		mcpschema.ToolSyncPull,
+		mcpschema.ToolSyncPush,
+		mcpschema.ToolIndexRefresh,
+		mcpschema.ToolName("delete_document"),
+		mcpschema.ToolName("purge_document"),
+	} {
+		if names[name] {
+			t.Fatalf("write-enabled lifecycle server should not expose %s", name)
+		}
+	}
+}
+
+func TestWriteEnabledServerCallsCaptureMutation(t *testing.T) {
+	root := t.TempDir()
+	local := &mcpops.Local{Root: root}
+	server := New(local, WithLocalWrites())
+
+	result, err := server.CallTool(context.Background(), mcpschema.ToolCaptureNote, json.RawMessage(`{"actor":"codex","title":"MCP Capture","body":"body","authors":["matt"],"tags":["mcp"]}`))
+	if err != nil {
+		t.Fatalf("CallTool(capture_note) error = %v", err)
+	}
+	envelope, ok := result.(mcpschema.Envelope[mcpschema.MutationResult])
+	if !ok {
+		t.Fatalf("unexpected result type %T", result)
+	}
+	if !envelope.OK || envelope.Data.DocumentID == "" || len(envelope.Data.ChangedPaths) != 1 {
+		t.Fatalf("unexpected mutation envelope: %#v", envelope)
+	}
+	if _, err := os.Stat(filepath.Join(root, "agents", "codex", "mcp-capture.md")); err != nil {
+		t.Fatalf("expected captured document: %v", err)
 	}
 }
 

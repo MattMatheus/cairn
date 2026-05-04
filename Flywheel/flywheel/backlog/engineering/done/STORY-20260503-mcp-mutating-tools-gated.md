@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260503-mcp-mutating-tools-gated
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: done
 - `source`: pm
 - `decision_refs`: [ADR-mcp-operation-surface, ADR-document-model-lifecycle, ADR-sync-conflict-behavior]
 - `success_metric`: MCP can expose local write tools behind an explicit opt-in server mode while preserving delete/purge exclusions.
@@ -51,6 +51,22 @@
 ## Open Questions
 - CLI flag name for write-enabled MCP mode.
 
-## Next Step
-- PM should schedule after read-only transport has proven stable.
+## Engineering Handoff
+- Implemented 2026-05-03.
+- Added `mcpserver.WithLocalWrites()` as explicit opt-in server configuration.
+- Default `mcpserver.New(local)` remains read-only.
+- Write-enabled mode registers `capture_note`, `promote_document`, and `archive_document`.
+- Mutation handlers call the existing `internal/mcpops` lifecycle adapters.
+- Added CLI mode `cairn mcp local-writes` while preserving `cairn mcp readonly`.
 
+## QA Handoff
+- Accepted 2026-05-03.
+- Verified default MCP server registers read-only tools only.
+- Verified write-enabled mode registers lifecycle mutation tools.
+- Verified representative `capture_note` call returns the common mutation envelope and writes the expected document.
+- Verified sync/index mutations remain absent from this lifecycle-gated mode.
+- Verified delete/purge-shaped tools are absent in all modes.
+- Verification: `GOCACHE=/private/tmp/cairn-go-cache go test ./...`
+
+## Next Step
+- Promote `STORY-20260503-cocoindex-local-packaging`.
