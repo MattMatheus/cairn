@@ -79,6 +79,34 @@ func TestServerRegistersLocalWriteToolsOnlyWhenEnabled(t *testing.T) {
 	}
 }
 
+func TestServerRegistersRemoteWriteToolsOnlyWhenEnabled(t *testing.T) {
+	server := New(&mcpops.Local{Root: t.TempDir()}, WithRemoteWrites())
+	names := map[mcpschema.ToolName]bool{}
+	for _, tool := range server.Tools() {
+		names[tool.Name] = true
+	}
+	for _, name := range []mcpschema.ToolName{
+		mcpschema.ToolSyncPull,
+		mcpschema.ToolSyncPush,
+		mcpschema.ToolIndexRefresh,
+	} {
+		if !names[name] {
+			t.Fatalf("remote-write server missing %s", name)
+		}
+	}
+	for _, name := range []mcpschema.ToolName{
+		mcpschema.ToolCaptureNote,
+		mcpschema.ToolPromoteDocument,
+		mcpschema.ToolArchiveDocument,
+		mcpschema.ToolName("delete_document"),
+		mcpschema.ToolName("purge_document"),
+	} {
+		if names[name] {
+			t.Fatalf("remote-write server should not expose %s", name)
+		}
+	}
+}
+
 func TestWriteEnabledServerCallsCaptureMutation(t *testing.T) {
 	root := t.TempDir()
 	local := &mcpops.Local{Root: root}
@@ -97,6 +125,25 @@ func TestWriteEnabledServerCallsCaptureMutation(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "agents", "codex", "mcp-capture.md")); err != nil {
 		t.Fatalf("expected captured document: %v", err)
+	}
+}
+
+func TestRemoteWriteServerCallsIndexRefreshMutation(t *testing.T) {
+	root := t.TempDir()
+	local := indexedLocal(t, root)
+	defer local.Close()
+	server := New(local, WithRemoteWrites())
+
+	result, err := server.CallTool(context.Background(), mcpschema.ToolIndexRefresh, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("CallTool(index_refresh) error = %v", err)
+	}
+	envelope, ok := result.(mcpschema.Envelope[mcpschema.IndexRefreshData])
+	if !ok {
+		t.Fatalf("unexpected result type %T", result)
+	}
+	if !envelope.OK || !envelope.Data.LocalRefreshed {
+		t.Fatalf("unexpected index refresh envelope: %#v", envelope)
 	}
 }
 

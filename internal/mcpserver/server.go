@@ -41,6 +41,12 @@ func WithLocalWrites() Option {
 	}
 }
 
+func WithRemoteWrites() Option {
+	return func(s *Server) {
+		s.registerRemoteWriteTools()
+	}
+}
+
 func (s *Server) Tools() []Tool {
 	tools := make([]Tool, 0, len(s.tools))
 	for _, tool := range s.tools {
@@ -221,6 +227,37 @@ func (s *Server) registerLocalWriteTools() {
 			return nil, err
 		}
 		return s.local.ArchiveDocument(ctx, req)
+	})
+}
+
+func (s *Server) registerRemoteWriteTools() {
+	s.register(mcpschema.ToolSyncPull, "Pull remote workspace changes when safe.", objectSchema(map[string]any{
+		"dry_run": map[string]any{"type": "boolean"},
+	}), func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var req mcpschema.SyncRequest
+		if err := decode(raw, &req); err != nil {
+			return nil, err
+		}
+		return s.local.SyncPull(ctx, req)
+	})
+	s.register(mcpschema.ToolSyncPush, "Push local workspace changes when safe.", objectSchema(map[string]any{
+		"dry_run": map[string]any{"type": "boolean"},
+	}), func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var req mcpschema.SyncRequest
+		if err := decode(raw, &req); err != nil {
+			return nil, err
+		}
+		return s.local.SyncPush(ctx, req)
+	})
+	s.register(mcpschema.ToolIndexRefresh, "Refresh configured index artifacts.", objectSchema(map[string]any{
+		"mode":    map[string]any{"type": "string"},
+		"dry_run": map[string]any{"type": "boolean"},
+	}), func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var req mcpschema.IndexRefreshRequest
+		if err := decode(raw, &req); err != nil {
+			return nil, err
+		}
+		return s.local.IndexRefresh(ctx, req)
 	})
 }
 

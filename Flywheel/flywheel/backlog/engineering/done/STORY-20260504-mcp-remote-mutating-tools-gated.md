@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260504-mcp-remote-mutating-tools-gated
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: done
 - `source`: planning
 - `decision_refs`: [ADR-mcp-operation-surface, ADR-sync-conflict-behavior, ADR-indexing-query-boundary]
 - `success_metric`: MCP can expose safe sync and index mutation tools only behind an explicit opt-in mode.
@@ -52,5 +52,21 @@
 ## Open Questions
 - Exact CLI mode name: candidate `cairn mcp remote-writes`.
 
+## Engineering Handoff
+- Implemented 2026-05-04.
+- Added `mcpserver.WithRemoteWrites()` as explicit opt-in server configuration.
+- Added `cairn mcp remote-writes`.
+- Remote-write mode registers `sync_pull`, `sync_push`, and `index_refresh`.
+- Default read-only and local lifecycle write modes remain separate.
+
+## QA Handoff
+- Accepted 2026-05-04.
+- Verified default MCP server remains read-only.
+- Verified local write mode remains limited to lifecycle mutations.
+- Verified remote-write mode registers sync/index mutation tools.
+- Verified delete/purge remain absent in all modes.
+- Verified representative `index_refresh` handler response.
+- Verification: `GOCACHE=/private/tmp/cairn-go-cache go test ./...`
+
 ## Next Step
-- Engineering should implement after this planning batch is accepted.
+- Promote `STORY-20260504-remote-profile-config-client-wiring`.
