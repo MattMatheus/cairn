@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260504-lifecycle-transition-enforcement
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: done
 - `source`: planning
 - `decision_refs`: [ADR-document-model-lifecycle]
 - `success_metric`: Promotion/archive operations enforce the accepted v1 status transition model.
@@ -46,7 +46,15 @@
 - Tightening transitions may break tests that relied on permissive canonical promotion.
 
 ## Open Questions
-- Whether direct `working -> canonical` should remain supported as a convenience or require `working -> proposed -> canonical`.
+- Resolved by ADR: require `working -> proposed -> canonical`; direct `working -> canonical` is refused.
 
 ## Next Step
-- PM/engineering should answer the open transition question before implementation.
+- Continue planning the next implementation batch, with Azure Container Apps deployment and config schema validation still queued.
+
+## Handoff Notes
+- Engineering completed 2026-05-04.
+- Centralized promotion transition enforcement in the document lifecycle layer.
+- Allowed `inbox|draft|working|proposed -> proposed` and `proposed|canonical -> canonical`.
+- Refused direct `working -> canonical` and `archived -> proposed` without moving or rewriting files.
+- Preserved archive behavior from managed document states.
+- QA completed 2026-05-04 with focused document/CLI/MCP adapter tests and full `go test ./...`.

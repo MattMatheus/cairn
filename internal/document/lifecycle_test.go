@@ -237,6 +237,68 @@ func TestCanonicalDecisionPromotionAssignsADRNumber(t *testing.T) {
 	}
 }
 
+func TestPromoteToProposedAllowsReviewStagingStatuses(t *testing.T) {
+	tests := []string{"inbox", "draft", "working", "proposed"}
+
+	for _, status := range tests {
+		t.Run(status, func(t *testing.T) {
+			workspace := testWorkspace(t)
+			sourcePath := filepath.Join("agents", "codex", status+".md")
+			writeFile(t, workspace, sourcePath, validLifecycleDocument("cairn:"+status, status, status, "note", status))
+
+			result, err := workspace.Promote(PromoteOptions{
+				Path:   sourcePath,
+				Status: "proposed",
+			})
+			if err != nil {
+				t.Fatalf("Promote returned error: %v", err)
+			}
+			parsed := mustParseFile(t, workspace, result.Path)
+			if parsed.Metadata.Status != "proposed" {
+				t.Fatalf("expected proposed status, got %s", parsed.Metadata.Status)
+			}
+		})
+	}
+}
+
+func TestPromoteBlocksInvalidLifecycleTransitionWithoutMovingFile(t *testing.T) {
+	workspace := testWorkspace(t)
+	sourcePath := filepath.Join("working", "jump-to-canonical.md")
+	content := validLifecycleDocument("cairn:invalidjump", "Jump To Canonical", "jump-to-canonical", "note", "working")
+	writeFile(t, workspace, sourcePath, content)
+
+	_, err := workspace.Promote(PromoteOptions{
+		Path:   sourcePath,
+		Status: "canonical",
+	})
+	if err == nil {
+		t.Fatal("expected direct working to canonical promotion to fail")
+	}
+	if _, err := os.Stat(filepath.Join(workspace.Root, sourcePath)); err != nil {
+		t.Fatalf("expected source file to remain: %v", err)
+	}
+	read, err := os.ReadFile(filepath.Join(workspace.Root, sourcePath))
+	if err != nil {
+		t.Fatalf("ReadFile returned error: %v", err)
+	}
+	if string(read) != content {
+		t.Fatalf("expected refused transition not to rewrite file")
+	}
+}
+
+func TestPromoteBlocksArchivedToProposed(t *testing.T) {
+	workspace := testWorkspace(t)
+	sourcePath := filepath.Join("archive", "notes", "old.md")
+	writeFile(t, workspace, sourcePath, validLifecycleDocument("cairn:archived", "Old", "old", "note", "archived"))
+
+	if _, err := workspace.Promote(PromoteOptions{Path: sourcePath, Status: "proposed"}); err == nil {
+		t.Fatal("expected archived to proposed promotion to fail")
+	}
+	if _, err := os.Stat(filepath.Join(workspace.Root, sourcePath)); err != nil {
+		t.Fatalf("expected source file to remain: %v", err)
+	}
+}
+
 func TestPromoteUsesConfiguredDestinationFolder(t *testing.T) {
 	workspace := testWorkspace(t)
 	writeConfig(t, workspace.Root, `schema_version: 1

@@ -10,6 +10,5 @@ No active engineering stories.
 
 After the active story passes QA, continue through the intake backlog in this rough order:
 
-- Lifecycle transition enforcement
 - Azure Container Apps indexer deployment plan
 - Config YAML schema validation

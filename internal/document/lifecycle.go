@@ -135,6 +135,9 @@ func (w Workspace) Promote(opts PromoteOptions) (OperationResult, error) {
 		return OperationResult{}, err
 	}
 	body := bodyFromMarkdown(string(content), parsed)
+	if err := validatePromotionTransition(parsed, targetStatus); err != nil {
+		return OperationResult{}, err
+	}
 
 	if targetStatus == "canonical" {
 		validation := Validate(parsed, ValidationModeDurableBoundary)
@@ -264,6 +267,30 @@ func (w Workspace) Purge(opts PurgeOptions) (OperationResult, error) {
 		DocumentID: parsed.Metadata.ID,
 		NextSteps:  []string{"run `cairn sync push` when sharing the deletion is needed"},
 	}, nil
+}
+
+func validatePromotionTransition(parsed ParseResult, targetStatus string) error {
+	if !parsed.HasFrontmatter {
+		if targetStatus == "proposed" {
+			return nil
+		}
+		return errors.New("canonical promotion requires managed document frontmatter")
+	}
+	if allowedStatusTransition(parsed.Metadata.Status, targetStatus) {
+		return nil
+	}
+	return fmt.Errorf("invalid lifecycle transition %q -> %q", parsed.Metadata.Status, targetStatus)
+}
+
+func allowedStatusTransition(sourceStatus string, targetStatus string) bool {
+	switch targetStatus {
+	case "proposed":
+		return sourceStatus == "inbox" || sourceStatus == "draft" || sourceStatus == "working" || sourceStatus == "proposed"
+	case "canonical":
+		return sourceStatus == "proposed" || sourceStatus == "canonical"
+	default:
+		return false
+	}
 }
 
 func (w Workspace) repairMetadata(metadata Metadata, opts PromoteOptions, path string) Metadata {
