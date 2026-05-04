@@ -30,6 +30,8 @@ func TestServerRegistersReadOnlyToolsOnly(t *testing.T) {
 		mcpschema.ToolListDocuments,
 		mcpschema.ToolReadDocument,
 		mcpschema.ToolSearchContext,
+		mcpschema.ToolSyncStatus,
+		mcpschema.ToolValidateWorkspace,
 	}
 	if strings.Join(toolNames(names), ",") != strings.Join(toolNames(want), ",") {
 		t.Fatalf("tools = %#v want %#v", names, want)

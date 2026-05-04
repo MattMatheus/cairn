@@ -124,6 +124,37 @@ func TestQuerySupportsRepresentativeMetadataFiltersAndRecentOrdering(t *testing.
 	assertFirstPath(t, index, Query{Recent: true}, "services/billing.md")
 }
 
+func TestIndexWorkspacePrunesDeletedIgnoredAndInvalidRows(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "working/deleted.md", managedMarkdown("cairn:deleted", "Deleted", "deleted", "note", "working", nil, nil, []string{"matt"}, "capture", "2026-05-03T12:00:00Z"))
+	writeFile(t, root, "working/ignored.md", managedMarkdown("cairn:ignored", "Ignored", "ignored", "note", "working", nil, nil, []string{"matt"}, "capture", "2026-05-03T12:00:00Z"))
+	writeFile(t, root, "working/invalid.md", managedMarkdown("cairn:invalid", "Invalid", "invalid", "note", "working", nil, nil, []string{"matt"}, "capture", "2026-05-03T12:00:00Z"))
+	writeFile(t, root, "working/kept.md", managedMarkdown("cairn:kept", "Kept", "kept", "note", "working", nil, nil, []string{"matt"}, "capture", "2026-05-03T12:00:00Z"))
+
+	index, err := Open(root)
+	if err != nil {
+		t.Fatalf("Open returned error: %v", err)
+	}
+	defer index.Close()
+	if _, err := index.IndexWorkspace(context.Background(), root); err != nil {
+		t.Fatalf("IndexWorkspace returned error: %v", err)
+	}
+
+	if err := os.Remove(filepath.Join(root, "working", "deleted.md")); err != nil {
+		t.Fatalf("Remove returned error: %v", err)
+	}
+	writeFile(t, root, ".cairnignore", "working/ignored.md\n")
+	writeFile(t, root, "working/invalid.md", "---\nid: bad\n---\n")
+	if _, err := index.IndexWorkspace(context.Background(), root); err != nil {
+		t.Fatalf("IndexWorkspace refresh returned error: %v", err)
+	}
+
+	assertNoResults(t, index, Query{Path: "working/deleted.md"})
+	assertNoResults(t, index, Query{Path: "working/ignored.md"})
+	assertNoResults(t, index, Query{Path: "working/invalid.md"})
+	assertFirstPath(t, index, Query{Path: "working/kept.md"}, "working/kept.md")
+}
+
 func writeFile(t *testing.T, root string, relativePath string, content string) {
 	t.Helper()
 	absolutePath := filepath.Join(root, relativePath)
@@ -132,6 +163,17 @@ func writeFile(t *testing.T, root string, relativePath string, content string) {
 	}
 	if err := os.WriteFile(absolutePath, []byte(content), 0o644); err != nil {
 		t.Fatalf("WriteFile returned error: %v", err)
+	}
+}
+
+func assertNoResults(t *testing.T, index *Index, query Query) {
+	t.Helper()
+	results, err := index.Query(context.Background(), query)
+	if err != nil {
+		t.Fatalf("Query(%#v) returned error: %v", query, err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("Query(%#v) returned stale results: %#v", query, results)
 	}
 }
 

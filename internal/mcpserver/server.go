@@ -175,6 +175,23 @@ func (s *Server) registerReadOnlyTools() {
 		}
 		return s.local.IndexStatus(ctx, req)
 	})
+	s.register(mcpschema.ToolSyncStatus, "Report local and remote sync state without mutating files.", emptySchema(), func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var req mcpschema.EmptyRequest
+		if err := decode(raw, &req); err != nil {
+			return nil, err
+		}
+		return s.local.SyncStatus(ctx, req)
+	})
+	s.register(mcpschema.ToolValidateWorkspace, "Validate managed markdown and sync/index metadata health.", objectSchema(map[string]any{
+		"paths": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+		"mode":  map[string]any{"type": "string"},
+	}), func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var req mcpschema.ValidateWorkspaceRequest
+		if err := decode(raw, &req); err != nil {
+			return nil, err
+		}
+		return s.local.ValidateWorkspace(ctx, req)
+	})
 	s.register(mcpschema.ToolReadDocument, "Read document metadata, structure, sections, summary, or full text.", objectSchema(map[string]any{
 		"id":       map[string]any{"type": "string"},
 		"path":     map[string]any{"type": "string"},

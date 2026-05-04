@@ -123,7 +123,13 @@ func (i *Index) IndexWorkspace(ctx context.Context, root string) (IndexReport, e
 		report.Skipped = append(report.Skipped, SkippedFile{Path: rel, Reason: reason})
 		return nil
 	})
-	return report, err
+	if err != nil {
+		return IndexReport{}, err
+	}
+	if err := i.pruneMissing(ctx, report.Indexed); err != nil {
+		return IndexReport{}, err
+	}
+	return report, nil
 }
 
 func (i *Index) IndexMarkdownFile(ctx context.Context, root string, relativePath string) (bool, string, error) {
@@ -280,6 +286,38 @@ func (i *Index) Get(ctx context.Context, path string) (mcpschema.SearchResult, b
 		return mcpschema.SearchResult{}, false, nil
 	}
 	return results[0], true, nil
+}
+
+func (i *Index) pruneMissing(ctx context.Context, indexed []string) error {
+	keep := map[string]bool{}
+	for _, path := range indexed {
+		keep[cleanPath(path)] = true
+	}
+	rows, err := i.db.QueryContext(ctx, `select path from documents`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var stale []string
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			return err
+		}
+		if !keep[path] {
+			stale = append(stale, path)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, path := range stale {
+		if _, err := i.db.ExecContext(ctx, `delete from documents where path = ?`, path); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (i *Index) migrate(ctx context.Context) error {

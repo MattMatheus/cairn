@@ -14,6 +14,7 @@ import (
 type StatusOptions struct {
 	WorkspaceID        string
 	RemoteManifestPath string
+	RemoteManifest     *Manifest
 	Now                func() time.Time
 }
 
@@ -40,9 +41,17 @@ func StatusReport(ctx context.Context, root string, opts StatusOptions) (Status,
 		return Status{}, err
 	}
 	local = statusComparableManifest(local)
-	remote, remoteAvailable, err := loadRemoteManifest(remoteManifestPath(root, opts.RemoteManifestPath))
-	if err != nil {
-		return Status{}, err
+	var remote Manifest
+	remoteAvailable := false
+	if opts.RemoteManifest != nil {
+		remote = *opts.RemoteManifest
+		remoteAvailable = true
+	} else {
+		var err error
+		remote, remoteAvailable, err = loadRemoteManifest(remoteManifestPath(root, opts.RemoteManifestPath))
+		if err != nil {
+			return Status{}, err
+		}
 	}
 	remote = statusComparableManifest(remote)
 
