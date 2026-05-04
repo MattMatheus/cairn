@@ -10,7 +10,6 @@ No active engineering stories.
 
 After the active story passes QA, continue through the intake backlog in this rough order:
 
-- Remote profile config client wiring
 - CLI-only purge archived document
 - Lifecycle transition enforcement
 - Azure Container Apps indexer deployment plan

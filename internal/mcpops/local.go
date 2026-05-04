@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"cairn/internal/document"
 	"cairn/internal/localindex"
 	"cairn/internal/mcpschema"
 	"cairn/internal/remoteindex"
@@ -26,7 +27,12 @@ func OpenLocal(root string) (*Local, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Local{Root: root, Index: index}, nil
+	local := &Local{Root: root, Index: index}
+	if err := configureRemoteClients(local); err != nil {
+		index.Close()
+		return nil, err
+	}
+	return local, nil
 }
 
 func (l *Local) Close() error {
@@ -34,6 +40,40 @@ func (l *Local) Close() error {
 		return nil
 	}
 	return l.Index.Close()
+}
+
+func configureRemoteClients(local *Local) error {
+	cfg, err := document.LoadConfig(local.Root)
+	if err != nil {
+		return err
+	}
+	if remoteStore, err := remoteStoreFromConfig(cfg.RemoteSync); err != nil {
+		return err
+	} else {
+		local.RemoteStore = remoteStore
+	}
+	if cfg.RemoteIndex.URL != "" {
+		local.RemoteIndex = remoteindex.HTTPClient{
+			BaseURL: cfg.RemoteIndex.URL,
+			Token:   remoteindex.AzureCLIToken(cfg.RemoteIndex.Audience),
+		}
+	}
+	return nil
+}
+
+func remoteStoreFromConfig(cfg document.RemoteSyncConfig) (remotestore.Store, error) {
+	if cfg.Provider == "" && cfg.Account == "" && cfg.Endpoint == "" && cfg.Container == "" {
+		return nil, nil
+	}
+	if cfg.Provider != "" && cfg.Provider != "azure_blob" {
+		return nil, fmt.Errorf("unsupported remote_sync provider %q", cfg.Provider)
+	}
+	return remotestore.NewAzureBlobStore(remotestore.AzureBlobConfig{
+		Account:   cfg.Account,
+		Endpoint:  cfg.Endpoint,
+		Container: cfg.Container,
+		Prefix:    cfg.Prefix,
+	}, nil)
 }
 
 func (l *Local) GetBootstrap(_ context.Context, _ mcpschema.EmptyRequest) (mcpschema.Envelope[mcpschema.GetBootstrapData], error) {

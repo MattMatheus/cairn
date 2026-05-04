@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260504-remote-profile-config-client-wiring
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: done
 - `source`: planning
 - `decision_refs`: [ADR-sync-conflict-behavior, ADR-indexing-query-boundary, ADR-mcp-operation-surface]
 - `success_metric`: Cairn can construct remote sync and index clients from workspace config without storing secrets.
@@ -52,5 +52,22 @@
 ## Open Questions
 - Whether indexer audience belongs in `.cairn/config.yaml` or an external profile file long term.
 
+## Engineering Handoff
+- Implemented 2026-05-04.
+- Added additive `remote_sync` and `remote_index` config sections.
+- `OpenLocal` now configures `remotestore.AzureBlobStore` when Azure Blob sync settings are present.
+- `OpenLocal` now configures `remoteindex.HTTPClient` when remote index URL settings are present.
+- Added Azure CLI token provider boundary for remote index audience tokens.
+- Missing remote config remains local-only.
+
+## QA Handoff
+- Accepted 2026-05-04.
+- Verified config can represent Azure Blob sync and remote index settings.
+- Verified missing config degrades to local-only behavior.
+- Verified configured sync operations receive an Azure Blob remote store.
+- Verified configured index operations receive an HTTP remote index client.
+- Verified workspace config does not require client secrets, account keys, or long-lived tokens.
+- Verification: `GOCACHE=/private/tmp/cairn-go-cache go test ./...`
+
 ## Next Step
-- Engineering should implement after gated remote MCP surface or in parallel if kept transport-neutral.
+- Promote `STORY-20260504-cli-purge-archived-document`.

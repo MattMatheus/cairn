@@ -14,6 +14,22 @@ type Config struct {
 	WorkspaceID    string
 	ManagedFolders []string
 	DocumentTypes  map[string]string
+	RemoteSync     RemoteSyncConfig
+	RemoteIndex    RemoteIndexConfig
+}
+
+type RemoteSyncConfig struct {
+	Provider  string
+	Account   string
+	Endpoint  string
+	Container string
+	Prefix    string
+}
+
+type RemoteIndexConfig struct {
+	URL      string
+	Audience string
+	TenantID string
 }
 
 type ConfigFinding struct {
@@ -139,6 +155,38 @@ func parseConfig(content string, cfg Config) Config {
 				}
 				cfg.DocumentTypes[docType] = folder
 			}
+		case "remote_sync":
+			key, value, ok := strings.Cut(line, ":")
+			if !ok {
+				continue
+			}
+			value = unquoteConfig(strings.TrimSpace(value))
+			switch strings.TrimSpace(key) {
+			case "provider":
+				cfg.RemoteSync.Provider = value
+			case "account":
+				cfg.RemoteSync.Account = value
+			case "endpoint":
+				cfg.RemoteSync.Endpoint = value
+			case "container":
+				cfg.RemoteSync.Container = value
+			case "prefix":
+				cfg.RemoteSync.Prefix = cleanConfigPath(value)
+			}
+		case "remote_index":
+			key, value, ok := strings.Cut(line, ":")
+			if !ok {
+				continue
+			}
+			value = unquoteConfig(strings.TrimSpace(value))
+			switch strings.TrimSpace(key) {
+			case "url":
+				cfg.RemoteIndex.URL = value
+			case "audience":
+				cfg.RemoteIndex.Audience = value
+			case "tenant_id":
+				cfg.RemoteIndex.TenantID = value
+			}
 		}
 	}
 	sort.Strings(cfg.ManagedFolders)
@@ -205,7 +253,7 @@ func validateConfigFile(root string) []ConfigFinding {
 				if unquoteConfig(strings.TrimSpace(value)) == "" {
 					findings = append(findings, configFinding("error", lineNo, "workspace_id is required"))
 				}
-			case "managed_folders", "document_types", "profiles", "required_skills":
+			case "managed_folders", "document_types", "remote_sync", "remote_index", "profiles", "required_skills":
 				findings = append(findings, configFinding("warning", lineNo, "section should be declared without an inline value"))
 			}
 			continue
@@ -238,6 +286,35 @@ func validateConfigFile(root string) []ConfigFinding {
 				findings = append(findings, configFinding("warning", lineNo, "unknown document type mapping "+docType))
 			}
 			managed[folder] = true
+		case "remote_sync":
+			key, value, ok := strings.Cut(line, ":")
+			if !ok || strings.TrimSpace(key) == "" {
+				findings = append(findings, configFinding("error", lineNo, "remote_sync entry is malformed"))
+				continue
+			}
+			key = strings.TrimSpace(key)
+			value = unquoteConfig(strings.TrimSpace(value))
+			switch key {
+			case "provider":
+				if value != "" && value != "azure_blob" {
+					findings = append(findings, configFinding("warning", lineNo, "unknown remote_sync provider "+value))
+				}
+			case "account", "endpoint", "container", "prefix":
+			default:
+				findings = append(findings, configFinding("warning", lineNo, "unknown remote_sync key "+key))
+			}
+		case "remote_index":
+			key, _, ok := strings.Cut(line, ":")
+			if !ok || strings.TrimSpace(key) == "" {
+				findings = append(findings, configFinding("error", lineNo, "remote_index entry is malformed"))
+				continue
+			}
+			key = strings.TrimSpace(key)
+			switch key {
+			case "url", "audience", "tenant_id":
+			default:
+				findings = append(findings, configFinding("warning", lineNo, "unknown remote_index key "+key))
+			}
 		case "":
 			findings = append(findings, configFinding("error", lineNo, "indented config entry is outside a section"))
 		}
@@ -255,7 +332,7 @@ func validateConfigFile(root string) []ConfigFinding {
 
 func isConfigSection(name string) bool {
 	switch name {
-	case "managed_folders", "document_types", "profiles", "required_skills":
+	case "managed_folders", "document_types", "remote_sync", "remote_index", "profiles", "required_skills":
 		return true
 	default:
 		return false

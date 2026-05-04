@@ -10,6 +10,7 @@ import (
 	"cairn/internal/localindex"
 	"cairn/internal/mcpschema"
 	"cairn/internal/remoteindex"
+	"cairn/internal/remotestore"
 )
 
 func TestLocalSearchContextUsesEnvelopeAndDegradation(t *testing.T) {
@@ -109,6 +110,56 @@ func TestIndexStatusAndBootstrapAreLocalOnly(t *testing.T) {
 	}
 	if !bootstrap.OK || bootstrap.Data.Summary == "" || len(bootstrap.NextSteps) == 0 {
 		t.Fatalf("unexpected bootstrap: %#v", bootstrap)
+	}
+}
+
+func TestOpenLocalConfiguresRemoteClientsFromWorkspaceConfig(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, ".cairn/config.yaml", `schema_version: 1
+workspace_id: cairn:workspace:test
+managed_folders:
+  - working
+document_types:
+  note: working
+remote_sync:
+  provider: azure_blob
+  account: acct
+  container: cairn
+  prefix: pod-a
+remote_index:
+  url: https://indexer.example
+  audience: api://cairn-indexer
+  tenant_id: tenant
+`)
+	local, err := OpenLocal(root)
+	if err != nil {
+		t.Fatalf("OpenLocal() error = %v", err)
+	}
+	defer local.Close()
+	store, ok := local.RemoteStore.(*remotestore.AzureBlobStore)
+	if !ok {
+		t.Fatalf("expected AzureBlobStore, got %T", local.RemoteStore)
+	}
+	if store.Config.Account != "acct" || store.Config.Container != "cairn" || store.Config.Prefix != "pod-a" {
+		t.Fatalf("unexpected store config: %#v", store.Config)
+	}
+	client, ok := local.RemoteIndex.(remoteindex.HTTPClient)
+	if !ok {
+		t.Fatalf("expected remoteindex.HTTPClient, got %T", local.RemoteIndex)
+	}
+	if client.BaseURL != "https://indexer.example" || client.Token == nil {
+		t.Fatalf("unexpected remote index client: %#v", client)
+	}
+}
+
+func TestOpenLocalWithoutRemoteConfigRemainsLocalOnly(t *testing.T) {
+	local, err := OpenLocal(t.TempDir())
+	if err != nil {
+		t.Fatalf("OpenLocal() error = %v", err)
+	}
+	defer local.Close()
+	if local.RemoteStore != nil || local.RemoteIndex != nil {
+		t.Fatalf("expected local-only clients, got store=%T index=%T", local.RemoteStore, local.RemoteIndex)
 	}
 }
 

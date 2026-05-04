@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os/exec"
 	"strings"
 )
 
@@ -14,6 +16,24 @@ type HTTPClient struct {
 	BaseURL string
 	Client  *http.Client
 	Token   func(context.Context) (string, error)
+}
+
+func AzureCLIToken(audience string) func(context.Context) (string, error) {
+	return func(ctx context.Context) (string, error) {
+		if audience == "" {
+			return "", nil
+		}
+		command := exec.CommandContext(ctx, "az", "account", "get-access-token", "--resource", audience, "--query", "accessToken", "--output", "tsv")
+		output, err := command.Output()
+		if err != nil {
+			return "", err
+		}
+		token := strings.TrimSpace(string(output))
+		if token == "" {
+			return "", errors.New("azure cli returned an empty indexer token")
+		}
+		return token, nil
+	}
 }
 
 func (c HTTPClient) Status(ctx context.Context, req StatusRequest) (StatusResponse, error) {

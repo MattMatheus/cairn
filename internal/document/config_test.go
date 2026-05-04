@@ -54,6 +54,37 @@ document_types:
 	}
 }
 
+func TestLoadConfigUsesRemoteProfileSettings(t *testing.T) {
+	root := t.TempDir()
+	writeConfig(t, root, `schema_version: 1
+workspace_id: cairn:workspace:test
+managed_folders:
+  - working
+document_types:
+  note: working
+remote_sync:
+  provider: azure_blob
+  account: acct
+  container: cairn
+  prefix: pod-a
+remote_index:
+  url: https://indexer.example
+  audience: api://cairn-indexer
+  tenant_id: tenant
+`)
+
+	cfg, err := LoadConfig(root)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.RemoteSync.Provider != "azure_blob" || cfg.RemoteSync.Account != "acct" || cfg.RemoteSync.Container != "cairn" || cfg.RemoteSync.Prefix != "pod-a" {
+		t.Fatalf("unexpected remote sync config: %#v", cfg.RemoteSync)
+	}
+	if cfg.RemoteIndex.URL != "https://indexer.example" || cfg.RemoteIndex.Audience != "api://cairn-indexer" || cfg.RemoteIndex.TenantID != "tenant" {
+		t.Fatalf("unexpected remote index config: %#v", cfg.RemoteIndex)
+	}
+}
+
 func TestValidateConfigFilesReportsMalformedConfig(t *testing.T) {
 	root := t.TempDir()
 	writeConfig(t, root, `schema_version: two
