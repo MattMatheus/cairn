@@ -23,8 +23,7 @@ Responses map into Cairn schema types:
 
 ## Follow-Ups
 
-- Define local Docker/Podman packaging for the CocoIndex service.
+- Local Docker/Podman packaging prototype lives in `deployments/local-indexer/`.
 - Define Azure Container Apps deployment and auth enforcement.
 - Define workspace-to-indexer refresh orchestration after sync pull/push.
 - Add semantic search integration into `search_context` once the service endpoint exists.
-

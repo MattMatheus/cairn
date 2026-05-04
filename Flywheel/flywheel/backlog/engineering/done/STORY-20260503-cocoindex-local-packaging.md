@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260503-cocoindex-local-packaging
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: done
 - `source`: pm
 - `decision_refs`: [ADR-indexing-query-boundary]
 - `success_metric`: Cairn has a local packaging prototype for a CocoIndex-backed indexer service that implements the remote index contract.
@@ -48,6 +48,21 @@
 ## Open Questions
 - Whether the indexer service should live in this repo or a sibling package long-term.
 
-## Next Step
-- PM should schedule after remote search integration shape settles.
+## Engineering Handoff
+- Implemented 2026-05-03.
+- Added `cmd/cairn-indexer` local HTTP indexer prototype.
+- Added `internal/remoteindex.Service` with `/index/status`, `/index/refresh`, and `/search`.
+- Added deterministic lexical search over managed Cairn markdown so smoke tests require no embeddings or paid model calls.
+- Added local Docker/Podman packaging under `deployments/local-indexer/`.
+- Documented required environment variables and workspace volume mount.
 
+## QA Handoff
+- Accepted 2026-05-03.
+- Verified service endpoint shape matches the remote index contract.
+- Verified status, refresh, and search through contract smoke tests.
+- Verified dry-run refresh does not mark the service fresh.
+- Verified packaging docs include env vars, volume mount, build/run commands, and smoke commands.
+- Verification: `GOCACHE=/private/tmp/cairn-go-cache go test ./...`
+
+## Next Step
+- Promote `STORY-20260503-aca-indexer-deployment-plan`.
