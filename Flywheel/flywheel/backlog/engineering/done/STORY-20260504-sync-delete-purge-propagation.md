@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260504-sync-delete-purge-propagation
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: done
 - `source`: planning
 - `decision_refs`: [ADR-sync-conflict-behavior, ADR-document-model-lifecycle]
 - `success_metric`: Sync treats local deletions from explicit purge as manifest changes without exposing remote hard delete through MCP lifecycle tools.
@@ -49,7 +49,14 @@
 - Remote deletion must remain a sync operation, not an agent lifecycle primitive.
 
 ## Open Questions
-- Whether remote stores should hard-delete blobs immediately or retain provider-level versions when available.
+- Resolved for V1: sync push calls the remote store delete operation; provider-level versioning/retention is an operator concern.
 
 ## Next Step
-- Engineering should inspect current sync delete handling before deciding whether this is a bug fix or a test-hardening story.
+- Promote `STORY-20260504-init-starter-workspace-files`.
+
+## Handoff Notes
+- Engineering completed 2026-05-04.
+- Confirmed syncstate already handles safe push-side remote deletes, pull-side local deletes, and conflict refusal.
+- Added CLI coverage for `cairn purge --confirm-purge` followed by `cairn sync dry-run`, verifying a local delete plan and next step.
+- Confirmed MCP purge/delete non-exposure remains covered by existing registration tests.
+- QA completed 2026-05-04 with focused CLI/syncstate/MCP tests and full `go test ./...`.

@@ -3,10 +3,14 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"cairn/internal/syncstate"
 )
 
 func TestRunInitValidateAndSearch(t *testing.T) {
@@ -124,6 +128,31 @@ func TestRunPromoteArchiveAndIndexStatus(t *testing.T) {
 	}
 }
 
+func TestRunSyncDryRunReportsDeleteAfterPurge(t *testing.T) {
+	root := t.TempDir()
+	runOK(t, "--root", root, "init")
+	runOK(t, "--root", root, "capture", "--actor", "codex", "--title", "Delete Me", "--body", "body")
+	runOK(t, "--root", root, "promote", "--path", "agents/codex/delete-me.md", "--type", "runbook")
+	runOK(t, "--root", root, "archive", "runbooks/delete-me.md")
+
+	saveSyncedManifestFixture(t, root)
+	runOK(t, "--root", root, "purge", "--confirm-purge", "archive/runbooks/delete-me.md")
+
+	stdout, stderr, code := run(t, "--root", root, "sync", "dry-run")
+	if code != 0 {
+		t.Fatalf("sync dry-run code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Sync dry-run direction: push") {
+		t.Fatalf("unexpected sync dry-run stdout:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "- delete archive/runbooks/delete-me.md") {
+		t.Fatalf("sync dry-run should report purge deletion:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Next: Push local changes when ready") {
+		t.Fatalf("sync dry-run should report next step:\n%s", stdout)
+	}
+}
+
 func TestRunCaptureReadsBodyFile(t *testing.T) {
 	root := t.TempDir()
 	bodyPath := filepath.Join(root, "body.txt")
@@ -144,6 +173,34 @@ func TestRunCaptureReadsBodyFile(t *testing.T) {
 	}
 	if !strings.Contains(string(content), "from file") {
 		t.Fatalf("captured file missing body:\n%s", string(content))
+	}
+}
+
+func saveSyncedManifestFixture(t *testing.T, root string) {
+	t.Helper()
+	now := func() time.Time { return time.Date(2026, 5, 4, 12, 0, 0, 0, time.UTC) }
+	manifest, err := syncstate.Generate(root, syncstate.GenerateOptions{WorkspaceID: "pod-1", Now: now})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	hash, err := syncstate.Hash(manifest)
+	if err != nil {
+		t.Fatalf("Hash() error = %v", err)
+	}
+	if err := syncstate.Save(root, syncstate.State{
+		LastRemoteManifestHash: hash,
+		LastSyncAt:             now(),
+		Entries:                manifest.Entries,
+	}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	content, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		t.Fatalf("MarshalIndent() error = %v", err)
+	}
+	path := filepath.Join(root, ".cairn", "remote-manifest.json")
+	if err := os.WriteFile(path, append(content, '\n'), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
 	}
 }
 
