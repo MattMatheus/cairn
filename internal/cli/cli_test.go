@@ -69,6 +69,28 @@ func TestRunPromoteArchiveAndIndexStatus(t *testing.T) {
 		t.Fatalf("unexpected archive stdout:\n%s", stdout)
 	}
 
+	stdout, stderr, code = run(t, "--root", root, "purge", "archive/runbooks/promote-me.md")
+	if code == 0 {
+		t.Fatalf("expected purge without confirmation to fail, stdout=%s", stdout)
+	}
+	if !strings.Contains(stderr, "requires --confirm-purge") {
+		t.Fatalf("unexpected purge stderr:\n%s", stderr)
+	}
+	if _, err := os.Stat(filepath.Join(root, "archive", "runbooks", "promote-me.md")); err != nil {
+		t.Fatalf("expected unconfirmed purge to keep file: %v", err)
+	}
+
+	stdout, stderr, code = run(t, "--root", root, "purge", "--confirm-purge", "archive/runbooks/promote-me.md")
+	if code != 0 {
+		t.Fatalf("purge code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Purged archive/runbooks/promote-me.md") || !strings.Contains(stdout, "Next:") {
+		t.Fatalf("unexpected purge stdout:\n%s", stdout)
+	}
+	if _, err := os.Stat(filepath.Join(root, "archive", "runbooks", "promote-me.md")); !os.IsNotExist(err) {
+		t.Fatalf("expected purged file removed, stat err: %v", err)
+	}
+
 	stdout, stderr, code = run(t, "--root", root, "index", "status")
 	if code != 0 {
 		t.Fatalf("index status code=%d stderr=%s", code, stderr)

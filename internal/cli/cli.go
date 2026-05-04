@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -42,6 +43,8 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, 
 		runErr = runPromote(rest[1:], opts, stdout)
 	case "archive":
 		runErr = runArchive(rest[1:], opts, stdout)
+	case "purge":
+		runErr = runPurge(rest[1:], opts, stdout)
 	case "validate":
 		runErr = runValidate(ctx, rest[1:], opts, stdout)
 	case "search":
@@ -183,6 +186,27 @@ func runArchive(args []string, opts options, stdout io.Writer) error {
 		return err
 	}
 	printMutation(stdout, "Archived", result)
+	return nil
+}
+
+func runPurge(args []string, opts options, stdout io.Writer) error {
+	fs := newFlagSet("purge")
+	path := fs.String("path", "", "workspace path")
+	confirm := fs.Bool("confirm-purge", false, "confirm hard deletion of an archived document")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *path == "" && fs.NArg() > 0 {
+		*path = fs.Arg(0)
+	}
+	if !*confirm {
+		return errors.New("purge requires --confirm-purge")
+	}
+	result, err := document.Workspace{Root: opts.root}.Purge(document.PurgeOptions{Path: *path})
+	if err != nil {
+		return err
+	}
+	printMutation(stdout, "Purged", result)
 	return nil
 }
 
@@ -381,7 +405,7 @@ func newFlagSet(name string) *flag.FlagSet {
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: cairn [--root DIR] <command> [options]")
-	fmt.Fprintln(w, "commands: init, capture, promote, archive, validate, search, index status, sync status, mcp readonly|local-writes|remote-writes")
+	fmt.Fprintln(w, "commands: init, capture, promote, archive, purge, validate, search, index status, sync status, mcp readonly|local-writes|remote-writes")
 }
 
 func runMCP(ctx context.Context, args []string, opts options, stdin io.Reader, stdout io.Writer) error {

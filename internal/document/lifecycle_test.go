@@ -284,6 +284,55 @@ func TestArchivePreservesOriginalPathUnderArchive(t *testing.T) {
 	}
 }
 
+func TestPurgeArchivedDocumentRemovesFile(t *testing.T) {
+	workspace := testWorkspace(t)
+	path := filepath.Join("archive", "decisions", "ADR-0001-old-choice.md")
+	writeFile(t, workspace, path, validLifecycleDocument("cairn:purgeid", "Old Choice", "old-choice", "decision", "archived"))
+
+	result, err := workspace.Purge(PurgeOptions{Path: path})
+	if err != nil {
+		t.Fatalf("Purge returned error: %v", err)
+	}
+	if result.Path != path {
+		t.Fatalf("unexpected purge path: %s", result.Path)
+	}
+	if result.DocumentID != "cairn:purgeid" {
+		t.Fatalf("document id was not preserved: %s", result.DocumentID)
+	}
+	if len(result.NextSteps) == 0 {
+		t.Fatal("expected purge to report next steps")
+	}
+	if _, err := os.Stat(filepath.Join(workspace.Root, path)); !os.IsNotExist(err) {
+		t.Fatalf("expected purged file removed, stat err: %v", err)
+	}
+}
+
+func TestPurgeRefusesNonArchivedDocument(t *testing.T) {
+	workspace := testWorkspace(t)
+	path := filepath.Join("archive", "decisions", "ADR-0001-old-choice.md")
+	writeFile(t, workspace, path, validLifecycleDocument("cairn:notarchived", "Old Choice", "old-choice", "decision", "canonical"))
+
+	if _, err := workspace.Purge(PurgeOptions{Path: path}); err == nil {
+		t.Fatal("expected purge to refuse non-archived status")
+	}
+	if _, err := os.Stat(filepath.Join(workspace.Root, path)); err != nil {
+		t.Fatalf("expected refused purge to keep file, stat err: %v", err)
+	}
+}
+
+func TestPurgeRequiresArchivePath(t *testing.T) {
+	workspace := testWorkspace(t)
+	path := filepath.Join("decisions", "ADR-0001-old-choice.md")
+	writeFile(t, workspace, path, validLifecycleDocument("cairn:archiveonly", "Old Choice", "old-choice", "decision", "archived"))
+
+	if _, err := workspace.Purge(PurgeOptions{Path: path}); err == nil {
+		t.Fatal("expected purge to refuse paths outside archive")
+	}
+	if _, err := os.Stat(filepath.Join(workspace.Root, path)); err != nil {
+		t.Fatalf("expected refused purge to keep file, stat err: %v", err)
+	}
+}
+
 func TestLifecycleOperationsRejectPathsOutsideWorkspace(t *testing.T) {
 	workspace := testWorkspace(t)
 
@@ -293,8 +342,14 @@ func TestLifecycleOperationsRejectPathsOutsideWorkspace(t *testing.T) {
 	if _, err := workspace.Archive(ArchiveOptions{Path: filepath.Join("..", "outside.md")}); err == nil {
 		t.Fatal("expected archive to reject path traversal")
 	}
+	if _, err := workspace.Purge(PurgeOptions{Path: filepath.Join("..", "outside.md")}); err == nil {
+		t.Fatal("expected purge to reject path traversal")
+	}
 	if _, err := workspace.Promote(PromoteOptions{Path: filepath.Join(workspace.Root, "absolute.md")}); err == nil {
 		t.Fatal("expected promote to reject absolute path")
+	}
+	if _, err := workspace.Purge(PurgeOptions{Path: filepath.Join(workspace.Root, "absolute.md")}); err == nil {
+		t.Fatal("expected purge to reject absolute path")
 	}
 }
 

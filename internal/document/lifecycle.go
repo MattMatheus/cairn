@@ -45,6 +45,10 @@ type ArchiveOptions struct {
 	Path string
 }
 
+type PurgeOptions struct {
+	Path string
+}
+
 func (w Workspace) Capture(opts CaptureOptions) (OperationResult, error) {
 	if opts.Actor == "" {
 		return OperationResult{}, errors.New("actor is required")
@@ -221,6 +225,44 @@ func (w Workspace) Archive(opts ArchiveOptions) (OperationResult, error) {
 		OriginalPath: sourcePath,
 		DocumentID:   metadata.ID,
 		NextSteps:    []string{"keep archived content for history", "use CLI purge only when hard deletion is required"},
+	}, nil
+}
+
+func (w Workspace) Purge(opts PurgeOptions) (OperationResult, error) {
+	if opts.Path == "" {
+		return OperationResult{}, errors.New("path is required")
+	}
+	sourcePath, err := cleanWorkspacePath(opts.Path)
+	if err != nil {
+		return OperationResult{}, err
+	}
+	if !isArchivePath(sourcePath) {
+		return OperationResult{}, errors.New("purge requires a path under archive/")
+	}
+
+	absolutePath := w.absolute(sourcePath)
+	content, err := os.ReadFile(absolutePath)
+	if err != nil {
+		return OperationResult{}, err
+	}
+	parsed, err := ParseMarkdown(string(content))
+	if err != nil {
+		return OperationResult{}, err
+	}
+	if !parsed.HasFrontmatter {
+		return OperationResult{}, errors.New("purge requires managed document frontmatter")
+	}
+	if parsed.Metadata.Status != "archived" {
+		return OperationResult{}, fmt.Errorf("purge requires archived status, got %q", parsed.Metadata.Status)
+	}
+	if err := os.Remove(absolutePath); err != nil {
+		return OperationResult{}, err
+	}
+
+	return OperationResult{
+		Path:       sourcePath,
+		DocumentID: parsed.Metadata.ID,
+		NextSteps:  []string{"run `cairn sync push` when sharing the deletion is needed"},
 	}, nil
 }
 
@@ -421,6 +463,10 @@ func cleanWorkspacePath(path string) (string, error) {
 		return "", fmt.Errorf("workspace path escapes root: %s", path)
 	}
 	return clean, nil
+}
+
+func isArchivePath(path string) bool {
+	return path == "archive" || strings.HasPrefix(path, "archive"+string(filepath.Separator))
 }
 
 func validatePathSegment(name string, value string) error {

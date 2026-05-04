@@ -38,6 +38,7 @@ func TestServerRegistersReadOnlyToolsOnly(t *testing.T) {
 		mcpschema.ToolCaptureNote,
 		mcpschema.ToolPromoteDocument,
 		mcpschema.ToolArchiveDocument,
+		mcpschema.ToolName("purge"),
 		mcpschema.ToolName("delete_document"),
 		mcpschema.ToolName("purge_document"),
 		mcpschema.ToolSyncPull,
@@ -70,6 +71,7 @@ func TestServerRegistersLocalWriteToolsOnlyWhenEnabled(t *testing.T) {
 		mcpschema.ToolSyncPull,
 		mcpschema.ToolSyncPush,
 		mcpschema.ToolIndexRefresh,
+		mcpschema.ToolName("purge"),
 		mcpschema.ToolName("delete_document"),
 		mcpschema.ToolName("purge_document"),
 	} {
@@ -98,6 +100,7 @@ func TestServerRegistersRemoteWriteToolsOnlyWhenEnabled(t *testing.T) {
 		mcpschema.ToolCaptureNote,
 		mcpschema.ToolPromoteDocument,
 		mcpschema.ToolArchiveDocument,
+		mcpschema.ToolName("purge"),
 		mcpschema.ToolName("delete_document"),
 		mcpschema.ToolName("purge_document"),
 	} {

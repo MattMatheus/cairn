@@ -3,7 +3,7 @@
 ## Metadata
 - `id`: STORY-20260504-cli-purge-archived-document
 - `owner_role`: Software Architect
-- `status`: intake
+- `status`: done
 - `source`: planning
 - `decision_refs`: [ADR-document-model-lifecycle, ADR-mcp-operation-surface]
 - `success_metric`: Cairn supports explicit CLI-only hard deletion for archived documents without exposing purge through MCP.
@@ -48,7 +48,14 @@
 - Avoid making hard delete too easy to trigger from agent workflows.
 
 ## Open Questions
-- Confirmation UX: `--confirm-purge` versus typed document id.
+- Resolved with `--confirm-purge` for V1 CLI ergonomics.
 
 ## Next Step
-- Engineering should implement after sync validation gate or independently.
+- Promote `STORY-20260504-lifecycle-transition-enforcement` and implement lifecycle transition guardrails.
+
+## Handoff Notes
+- Engineering completed 2026-05-04.
+- Added document-layer purge for archived files under `archive/` only.
+- Added `cairn purge --confirm-purge <path>` as the only hard-delete surface.
+- Preserved MCP absence of purge/delete tools in read-only, local-writes, and remote-writes modes.
+- QA completed 2026-05-04 with focused lifecycle/CLI/MCP tests and full `go test ./...`.
