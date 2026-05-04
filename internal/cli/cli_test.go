@@ -84,6 +84,14 @@ func TestRunPromoteArchiveAndIndexStatus(t *testing.T) {
 	if !strings.Contains(stdout, "Sync diverged: false") {
 		t.Fatalf("unexpected sync status stdout:\n%s", stdout)
 	}
+
+	stdout, stderr, code = run(t, "--root", root, "sync", "dry-run")
+	if code != 0 {
+		t.Fatalf("sync dry-run code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Sync dry-run direction: push") {
+		t.Fatalf("unexpected sync dry-run stdout:\n%s", stdout)
+	}
 }
 
 func TestRunCaptureReadsBodyFile(t *testing.T) {

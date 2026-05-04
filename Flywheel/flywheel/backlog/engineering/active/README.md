@@ -10,7 +10,6 @@ No active engineering stories.
 
 After the active story passes QA, continue through the intake backlog in this rough order:
 
-- Sync dry-run plan
 - Sync pull apply
 - Sync push apply
 - Remote index search integration

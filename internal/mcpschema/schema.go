@@ -345,6 +345,15 @@ type SyncRequest struct {
 	DryRun bool `json:"dry_run,omitempty"`
 }
 
+type SyncDirection string
+
+const (
+	SyncDirectionClean   SyncDirection = "clean"
+	SyncDirectionPull    SyncDirection = "pull"
+	SyncDirectionPush    SyncDirection = "push"
+	SyncDirectionRefused SyncDirection = "refused"
+)
+
 type SyncStatusData struct {
 	LocalChanges  []SyncChange   `json:"local_changes,omitempty"`
 	RemoteChanges []SyncChange   `json:"remote_changes,omitempty"`
@@ -369,7 +378,16 @@ type SyncConflict struct {
 
 type SyncMutationData struct {
 	MutationResult
-	Diverged bool `json:"diverged"`
+	Diverged bool          `json:"diverged"`
+	Plan     *SyncPlanData `json:"plan,omitempty"`
+}
+
+type SyncPlanData struct {
+	Direction      SyncDirection  `json:"direction"`
+	Safe           bool           `json:"safe"`
+	PlannedChanges []SyncChange   `json:"planned_changes,omitempty"`
+	Conflicts      []SyncConflict `json:"conflicts,omitempty"`
+	Diverged       bool           `json:"diverged"`
 }
 
 type IndexStatusRequest struct {

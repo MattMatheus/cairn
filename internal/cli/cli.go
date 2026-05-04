@@ -374,14 +374,40 @@ func runMCP(ctx context.Context, args []string, opts options, stdin io.Reader, s
 }
 
 func runSync(ctx context.Context, args []string, opts options, stdout io.Writer) error {
-	if len(args) == 0 || args[0] != "status" {
-		return fmt.Errorf("usage: cairn sync status")
+	if len(args) == 0 {
+		return fmt.Errorf("usage: cairn sync status|dry-run")
 	}
 	local, err := mcpops.OpenLocal(opts.root)
 	if err != nil {
 		return err
 	}
 	defer local.Close()
+	if args[0] == "dry-run" {
+		envelope, err := local.SyncDryRun(ctx, mcpschema.SyncRequest{DryRun: true})
+		if err != nil {
+			return err
+		}
+		plan := envelope.Data.Plan
+		if plan == nil {
+			return fmt.Errorf("sync dry-run did not return a plan")
+		}
+		fmt.Fprintf(stdout, "Sync dry-run direction: %s\n", plan.Direction)
+		fmt.Fprintf(stdout, "Safe: %t\n", plan.Safe)
+		for _, change := range plan.PlannedChanges {
+			fmt.Fprintf(stdout, "- %s %s\n", change.Type, change.Path)
+		}
+		for _, conflict := range plan.Conflicts {
+			fmt.Fprintf(stdout, "Conflict: local %s %s / remote %s %s\n", conflict.Local.Type, conflict.Local.Path, conflict.Remote.Type, conflict.Remote.Path)
+		}
+		printWarnings(stdout, envelope.Warnings)
+		for _, step := range envelope.NextSteps {
+			fmt.Fprintf(stdout, "Next: %s\n", step.Label)
+		}
+		return nil
+	}
+	if args[0] != "status" {
+		return fmt.Errorf("usage: cairn sync status|dry-run")
+	}
 	envelope, err := local.SyncStatus(ctx, mcpschema.EmptyRequest{})
 	if err != nil {
 		return err
