@@ -266,17 +266,21 @@ func (w Workspace) repairMetadata(metadata Metadata, opts PromoteOptions, path s
 }
 
 func (w Workspace) promotionTargetPath(metadata Metadata, status string) (string, error) {
+	cfg, err := LoadConfig(w.Root)
+	if err != nil {
+		return "", err
+	}
 	if status == "proposed" {
-		return filepath.Join(destinationFolder(metadata.Type), metadata.Slug+".md"), nil
+		return filepath.Join(cfg.DestinationFolder(metadata.Type), metadata.Slug+".md"), nil
 	}
 	if metadata.Type == "decision" {
 		number, err := w.nextADRNumber()
 		if err != nil {
 			return "", err
 		}
-		return filepath.Join("decisions", fmt.Sprintf("ADR-%04d-%s.md", number, metadata.Slug)), nil
+		return filepath.Join(cfg.DestinationFolder(metadata.Type), fmt.Sprintf("ADR-%04d-%s.md", number, metadata.Slug)), nil
 	}
-	return filepath.Join(destinationFolder(metadata.Type), metadata.Slug+".md"), nil
+	return filepath.Join(cfg.DestinationFolder(metadata.Type), metadata.Slug+".md"), nil
 }
 
 func (w Workspace) nextADRNumber() (int, error) {
@@ -399,25 +403,6 @@ func titleFromPath(path string) string {
 		parts[i] = strings.ToUpper(part[:1]) + part[1:]
 	}
 	return strings.Join(parts, " ")
-}
-
-func destinationFolder(docType string) string {
-	switch docType {
-	case "decision":
-		return "decisions"
-	case "runbook":
-		return "runbooks"
-	case "project":
-		return "projects"
-	case "service":
-		return "services"
-	case "handoff":
-		return "handoffs"
-	case "onboarding":
-		return "onboarding"
-	default:
-		return "working"
-	}
 }
 
 func defaultString(value string, fallback string) string {

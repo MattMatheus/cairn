@@ -67,7 +67,7 @@ func validateDocument(root string, rel string, mode document.ValidationMode) ([]
 			Path:     rel,
 		}}, nil
 	}
-	if !isManagedMarkdown(rel, parsed) {
+	if !isManagedMarkdown(root, rel, parsed) {
 		return nil, nil
 	}
 
@@ -205,9 +205,18 @@ func hasErrors(findings []mcpschema.ValidationFinding) bool {
 	return false
 }
 
-func isManagedMarkdown(rel string, parsed document.ParseResult) bool {
+func isManagedMarkdown(root string, rel string, parsed document.ParseResult) bool {
 	if parsed.HasFrontmatter && parsed.Metadata.ID != "" {
 		return true
+	}
+	cfg, err := document.LoadConfig(root)
+	if err == nil {
+		rel = filepath.ToSlash(rel)
+		for folder := range cfg.ManagedFolderSet() {
+			if rel == folder || strings.HasPrefix(rel, folder+"/") {
+				return true
+			}
+		}
 	}
 	first, _, _ := strings.Cut(filepath.ToSlash(rel), "/")
 	switch first {

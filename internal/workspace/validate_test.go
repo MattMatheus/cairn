@@ -126,6 +126,22 @@ func TestValidateSkipsUnmanagedMarkdown(t *testing.T) {
 	}
 }
 
+func TestValidateUsesConfiguredManagedFolders(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, ".cairn/config.yaml", `schema_version: 1
+managed_folders:
+  - knowledge/base
+`)
+	writeFile(t, root, "knowledge/base/raw.md", "# Missing frontmatter\n")
+	writeHealthyMetadata(t, root)
+
+	data, err := Validate(context.Background(), root, ValidateOptions{})
+	if err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+	assertFinding(t, data.Findings, "knowledge/base/raw.md", "", mcpschema.WarningValidation, "warning")
+}
+
 func assertFinding(t *testing.T, findings []mcpschema.ValidationFinding, path string, docID string, code mcpschema.WarningCode, severity string) {
 	t.Helper()
 	for _, finding := range findings {

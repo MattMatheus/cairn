@@ -237,6 +237,27 @@ func TestCanonicalDecisionPromotionAssignsADRNumber(t *testing.T) {
 	}
 }
 
+func TestPromoteUsesConfiguredDestinationFolder(t *testing.T) {
+	workspace := testWorkspace(t)
+	writeConfig(t, workspace.Root, `schema_version: 1
+document_types:
+  runbook: ops/runbooks
+`)
+	writeFile(t, workspace, filepath.Join("working", "restart-service.md"), validLifecycleDocument("cairn:runbookid", "Restart Service", "restart-service", "runbook", "working"))
+
+	result, err := workspace.Promote(PromoteOptions{
+		Path:   filepath.Join("working", "restart-service.md"),
+		Type:   "runbook",
+		Status: "proposed",
+	})
+	if err != nil {
+		t.Fatalf("Promote returned error: %v", err)
+	}
+	if result.Path != filepath.Join("ops", "runbooks", "restart-service.md") {
+		t.Fatalf("unexpected configured promotion path %q", result.Path)
+	}
+}
+
 func TestArchivePreservesOriginalPathUnderArchive(t *testing.T) {
 	workspace := testWorkspace(t)
 	sourcePath := filepath.Join("decisions", "ADR-0001-old-choice.md")
