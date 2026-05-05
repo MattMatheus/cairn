@@ -172,30 +172,24 @@ Enterprise preferred:
 - Add CocoIndex pipeline image that writes Postgres/pgvector artifacts.
 - Add production runbook for refresh failures and index freshness checks.
 
-## Infrastructure Skeleton
+## Infrastructure
 
-The `infra/main.bicep` module is a scaffold for review and local rendering. It models:
+Terraform lives in `deployments/terraform/`. It manages the full resource set:
 
+- Resource group (`athdev-wus2-centralkb-rg`).
+- Azure Container Registry.
+- Storage account and blob container for workspace files.
 - Log Analytics workspace.
-- Azure Container Apps environment.
-- User-assigned managed identity.
+- User-assigned managed identity with AcrPull and Storage Blob Data Reader assignments.
+- Container Apps environment.
 - Container App with external HTTPS ingress.
-- Storage Blob Data Reader assignment for an existing workspace storage account.
-- PostgreSQL connection as an infrastructure-owned secret reference name, not a checked-in value.
-
-Render the template locally:
 
 ```sh
-az bicep build --file deployments/azure-container-apps-indexer/infra/main.bicep
+cd deployments/terraform
+cp terraform.tfvars.example terraform.tfvars   # fill in acr_name, storage_account_name, etc.
+terraform init
+terraform plan
+terraform apply
 ```
 
-Preview a deployment:
-
-```sh
-az deployment group what-if \
-  --resource-group <resource-group> \
-  --template-file deployments/azure-container-apps-indexer/infra/main.bicep \
-  --parameters @deployments/azure-container-apps-indexer/infra/main.parameters.example.json
-```
-
-The example parameters file contains no secrets. Replace placeholder IDs and image names before any real deployment.
+The `container_app_fqdn` output is the value to use for `remote_index.url` in workspace config.

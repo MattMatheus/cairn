@@ -147,7 +147,7 @@ func (l *Local) FindDocument(ctx context.Context, req mcpschema.FindDocumentRequ
 	}, nil
 }
 
-func (l *Local) IndexStatus(_ context.Context, _ mcpschema.IndexStatusRequest) (mcpschema.Envelope[mcpschema.IndexStatusData], error) {
+func (l *Local) IndexStatus(ctx context.Context, req mcpschema.IndexStatusRequest) (mcpschema.Envelope[mcpschema.IndexStatusData], error) {
 	info, err := os.Stat(localindex.DBPath(l.Root))
 	localAvailable := err == nil
 	var lastRefresh time.Time
@@ -157,27 +157,58 @@ func (l *Local) IndexStatus(_ context.Context, _ mcpschema.IndexStatusRequest) (
 	envelope := mcpschema.Envelope[mcpschema.IndexStatusData]{
 		OK: true,
 		Data: mcpschema.IndexStatusData{
-			LocalAvailable:  localAvailable,
-			RemoteAvailable: false,
-			Fresh:           localAvailable,
-			LastRefreshAt:   lastRefresh,
+			LocalAvailable: localAvailable,
+			Fresh:          localAvailable,
+			LastRefreshAt:  lastRefresh,
 		},
 		Provenance: l.provenance("local_index"),
 	}
-	envelope.Warnings = append(envelope.Warnings, mcpschema.Warning{
-		Code:    mcpschema.WarningRemoteService,
-		Message: "remote indexer is unavailable in local profile",
+	if l.RemoteIndex == nil {
+		envelope.Warnings = append(envelope.Warnings, mcpschema.Warning{
+			Code:    mcpschema.WarningRemoteService,
+			Message: "remote indexer is unavailable in local profile",
+		})
+		envelope.Unavailable = append(envelope.Unavailable, mcpschema.UnavailableMode{
+			Mode:      "remote",
+			Reason:    mcpschema.WarningRemoteService,
+			Message:   "remote indexer is not configured",
+			Retryable: false,
+		})
+		envelope.NextSteps = append(envelope.NextSteps, mcpschema.NextStep{
+			Action: string(mcpschema.ToolSearchContext),
+			Label:  "Use local search",
+			Reason: "Local metadata and full-text search remain available.",
+		})
+		return envelope, nil
+	}
+	remote, err := l.RemoteIndex.Status(ctx, remoteindex.StatusRequest{
+		WorkspaceID: l.provenance("index_status").WorkspaceID,
 	})
-	envelope.Unavailable = append(envelope.Unavailable, mcpschema.UnavailableMode{
-		Mode:      "remote",
-		Reason:    mcpschema.WarningRemoteService,
-		Message:   "remote indexer is not configured",
-		Retryable: false,
-	})
+	if err != nil {
+		envelope.Warnings = append(envelope.Warnings, mcpschema.Warning{
+			Code:    mcpschema.WarningRemoteService,
+			Message: "remote indexer status failed: " + err.Error(),
+		})
+		envelope.Unavailable = append(envelope.Unavailable, mcpschema.UnavailableMode{
+			Mode:      "remote",
+			Reason:    mcpschema.WarningRemoteService,
+			Message:   "remote indexer unreachable",
+			Retryable: true,
+		})
+		return envelope, nil
+	}
+	remoteStatus := remote.SchemaStatus()
+	envelope.Data.RemoteAvailable = remoteStatus.RemoteAvailable
+	if remoteStatus.Fresh {
+		envelope.Data.Fresh = true
+	}
+	if !remoteStatus.LastRefreshAt.IsZero() {
+		envelope.Data.LastRefreshAt = remoteStatus.LastRefreshAt
+	}
 	envelope.NextSteps = append(envelope.NextSteps, mcpschema.NextStep{
 		Action: string(mcpschema.ToolSearchContext),
-		Label:  "Use local search",
-		Reason: "Local metadata and full-text search remain available.",
+		Label:  "Search context",
+		Reason: "Remote indexer is available.",
 	})
 	return envelope, nil
 }

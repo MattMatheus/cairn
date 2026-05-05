@@ -1,0 +1,6 @@
+environment_name       = "centralai"
+acr_name               = "athedevcairncentralkb"        # must be globally unique, alphanumeric only
+storage_account_name   = "athedevcairncentralkb"        # must be globally unique, lowercase alphanumeric
+storage_container_name = "centralai"
+workspace_id           = "cairn:workspace:centralai"
+container_image        = "athedevcairncentralkb.azurecr.io/cairn-indexer:latest"
