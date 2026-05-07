@@ -15,7 +15,7 @@ The installer downloads the current GitHub Release asset for your OS and archite
 Useful overrides:
 
 ```sh
-CAIRN_VERSION=v0.1.0 sh scripts/install.sh
+CAIRN_VERSION=v0.1 sh scripts/install.sh
 CAIRN_INSTALL_DIR=/usr/local/bin sh scripts/install.sh
 CAIRN_REPO=MattMatheus/cairn sh scripts/install.sh
 ```
@@ -25,7 +25,7 @@ CAIRN_REPO=MattMatheus/cairn sh scripts/install.sh
 From PowerShell:
 
 ```powershell
-iwr https://raw.githubusercontent.com/MattMatheus/cairn/main/scripts/install.ps1 -UseB | iex
+irm https://raw.githubusercontent.com/MattMatheus/cairn/main/scripts/install.ps1 | iex
 $env:PATH="$HOME\.cairn\bin;$env:PATH"
 cairn version
 ```
@@ -35,9 +35,9 @@ The Windows installer downloads `cairn_windows_amd64.zip` or `cairn_windows_arm6
 Useful overrides:
 
 ```powershell
-$env:CAIRN_VERSION="v0.1.0"
+$env:CAIRN_VERSION="v0.1"
 $env:CAIRN_INSTALL_DIR="$HOME\bin"
-iwr https://raw.githubusercontent.com/MattMatheus/cairn/main/scripts/install.ps1 -UseB | iex
+irm https://raw.githubusercontent.com/MattMatheus/cairn/main/scripts/install.ps1 | iex
 ```
 
 ## Source Contributor Fallback

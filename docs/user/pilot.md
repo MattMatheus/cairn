@@ -51,7 +51,7 @@ cairn version
 Windows PowerShell:
 
 ```powershell
-iwr https://raw.githubusercontent.com/MattMatheus/cairn/main/scripts/install.ps1 -UseB | iex
+irm https://raw.githubusercontent.com/MattMatheus/cairn/main/scripts/install.ps1 | iex
 $env:PATH="$HOME\.cairn\bin;$env:PATH"
 cairn version
 ```
