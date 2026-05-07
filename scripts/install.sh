@@ -5,6 +5,18 @@ repo="${CAIRN_REPO:-MattMatheus/cairn}"
 version="${CAIRN_VERSION:-latest}"
 install_dir="${CAIRN_INSTALL_DIR:-$HOME/.local/bin}"
 
+case "$repo" in
+  */*/*|/*|*"://"*|"" )
+    echo "Ignoring CAIRN_REPO=$repo; expected GitHub owner/repo such as MattMatheus/cairn." >&2
+    repo="MattMatheus/cairn"
+    ;;
+  */*) ;;
+  *)
+    echo "Ignoring CAIRN_REPO=$repo; expected GitHub owner/repo such as MattMatheus/cairn." >&2
+    repo="MattMatheus/cairn"
+    ;;
+esac
+
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 arch="$(uname -m)"
 case "$arch" in
