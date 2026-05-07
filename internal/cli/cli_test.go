@@ -50,6 +50,9 @@ func TestRunInitValidateAndSearch(t *testing.T) {
 	if !strings.Contains(stdout, "agents/codex/searchable-note.md") {
 		t.Fatalf("unexpected search stdout:\n%s", stdout)
 	}
+	if strings.Contains(stdout, "remote indexer is unavailable") || strings.Contains(stdout, "semantic search is unavailable") {
+		t.Fatalf("auto local search should not warn about unconfigured remote indexer:\n%s", stdout)
+	}
 }
 
 func TestRunPromoteArchiveAndIndexStatus(t *testing.T) {

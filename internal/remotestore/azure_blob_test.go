@@ -158,6 +158,29 @@ func TestAzureBlobStoreManifestRoundTripUsesRemoteManifestPath(t *testing.T) {
 	}
 }
 
+func TestAzureBlobStoreAzuriteAuthUsesSharedKey(t *testing.T) {
+	store, err := NewAzureBlobStore(AzureBlobConfig{
+		Endpoint:  "http://localhost:10000/devstoreaccount1",
+		Container: "cairn",
+		AuthMode:  "azurite",
+	}, nil)
+	if err != nil {
+		t.Fatalf("NewAzureBlobStore() error = %v", err)
+	}
+	store.Client = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if !strings.HasPrefix(r.Header.Get("Authorization"), "SharedKey devstoreaccount1:") {
+			t.Fatalf("missing azurite shared key auth: %#v", r.Header)
+		}
+		if r.Header.Get("x-ms-date") == "" || r.Header.Get("x-ms-version") == "" {
+			t.Fatalf("missing shared key headers: %#v", r.Header)
+		}
+		return response(http.StatusCreated, ""), nil
+	})}
+	if err := store.WriteObject(context.Background(), "working/a.md", []byte("hello")); err != nil {
+		t.Fatalf("WriteObject() error = %v", err)
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {

@@ -47,7 +47,7 @@ func configureRemoteClients(local *Local) error {
 	if err != nil {
 		return err
 	}
-	if remoteStore, err := remoteStoreFromConfig(cfg.RemoteSync); err != nil {
+	if remoteStore, err := remoteStoreFromConfig(local.Root, cfg.RemoteSync); err != nil {
 		return err
 	} else {
 		local.RemoteStore = remoteStore
@@ -61,19 +61,28 @@ func configureRemoteClients(local *Local) error {
 	return nil
 }
 
-func remoteStoreFromConfig(cfg document.RemoteSyncConfig) (remotestore.Store, error) {
-	if cfg.Provider == "" && cfg.Account == "" && cfg.Endpoint == "" && cfg.Container == "" {
+func remoteStoreFromConfig(root string, cfg document.RemoteSyncConfig) (remotestore.Store, error) {
+	if cfg.Provider == "" && cfg.Account == "" && cfg.Endpoint == "" && cfg.Container == "" && cfg.Root == "" {
 		return nil, nil
 	}
-	if cfg.Provider != "" && cfg.Provider != "azure_blob" {
+	switch cfg.Provider {
+	case "", "azure_blob":
+		return remotestore.NewAzureBlobStore(remotestore.AzureBlobConfig{
+			Account:   cfg.Account,
+			Endpoint:  cfg.Endpoint,
+			Container: cfg.Container,
+			Prefix:    cfg.Prefix,
+			AuthMode:  cfg.AuthMode,
+		}, nil)
+	case "local_fs":
+		storeRoot := cfg.Root
+		if storeRoot != "" && !filepath.IsAbs(storeRoot) {
+			storeRoot = filepath.Join(root, filepath.FromSlash(storeRoot))
+		}
+		return remotestore.NewLocalFSStore(storeRoot, cfg.Prefix)
+	default:
 		return nil, fmt.Errorf("unsupported remote_sync provider %q", cfg.Provider)
 	}
-	return remotestore.NewAzureBlobStore(remotestore.AzureBlobConfig{
-		Account:   cfg.Account,
-		Endpoint:  cfg.Endpoint,
-		Container: cfg.Container,
-		Prefix:    cfg.Prefix,
-	}, nil)
 }
 
 func (l *Local) GetBootstrap(_ context.Context, _ mcpschema.EmptyRequest) (mcpschema.Envelope[mcpschema.GetBootstrapData], error) {
@@ -147,7 +156,7 @@ func (l *Local) FindDocument(ctx context.Context, req mcpschema.FindDocumentRequ
 	}, nil
 }
 
-func (l *Local) IndexStatus(ctx context.Context, req mcpschema.IndexStatusRequest) (mcpschema.Envelope[mcpschema.IndexStatusData], error) {
+func (l *Local) IndexStatus(ctx context.Context, _ mcpschema.IndexStatusRequest) (mcpschema.Envelope[mcpschema.IndexStatusData], error) {
 	info, err := os.Stat(localindex.DBPath(l.Root))
 	localAvailable := err == nil
 	var lastRefresh time.Time
@@ -164,21 +173,19 @@ func (l *Local) IndexStatus(ctx context.Context, req mcpschema.IndexStatusReques
 		Provenance: l.provenance("local_index"),
 	}
 	if l.RemoteIndex == nil {
-		envelope.Warnings = append(envelope.Warnings, mcpschema.Warning{
-			Code:    mcpschema.WarningRemoteService,
-			Message: "remote indexer is unavailable in local profile",
-		})
-		envelope.Unavailable = append(envelope.Unavailable, mcpschema.UnavailableMode{
-			Mode:      "remote",
-			Reason:    mcpschema.WarningRemoteService,
-			Message:   "remote indexer is not configured",
-			Retryable: false,
-		})
-		envelope.NextSteps = append(envelope.NextSteps, mcpschema.NextStep{
-			Action: string(mcpschema.ToolSearchContext),
-			Label:  "Use local search",
-			Reason: "Local metadata and full-text search remain available.",
-		})
+		if localAvailable {
+			envelope.NextSteps = append(envelope.NextSteps, mcpschema.NextStep{
+				Action: string(mcpschema.ToolSearchContext),
+				Label:  "Use local search",
+				Reason: "Local metadata and full-text search are available.",
+			})
+		} else {
+			envelope.NextSteps = append(envelope.NextSteps, mcpschema.NextStep{
+				Action: string(mcpschema.ToolIndexRefresh),
+				Label:  "Refresh local index",
+				Reason: "Create the local SQLite index before searching.",
+			})
+		}
 		return envelope, nil
 	}
 	remote, err := l.RemoteIndex.Status(ctx, remoteindex.StatusRequest{
@@ -194,6 +201,18 @@ func (l *Local) IndexStatus(ctx context.Context, req mcpschema.IndexStatusReques
 			Reason:    mcpschema.WarningRemoteService,
 			Message:   "remote indexer unreachable",
 			Retryable: true,
+		})
+		if !localAvailable {
+			envelope.NextSteps = append(envelope.NextSteps, mcpschema.NextStep{
+				Action: string(mcpschema.ToolIndexRefresh),
+				Label:  "Refresh local index",
+				Reason: "Create the local SQLite index for local-first search.",
+			})
+		}
+		envelope.NextSteps = append(envelope.NextSteps, mcpschema.NextStep{
+			Action: string(mcpschema.ToolIndexStatus),
+			Label:  "Retry remote index status",
+			Reason: "Remote index health could not be confirmed.",
 		})
 		return envelope, nil
 	}
@@ -214,68 +233,72 @@ func (l *Local) IndexStatus(ctx context.Context, req mcpschema.IndexStatusReques
 }
 
 func (l *Local) IndexRefresh(ctx context.Context, req mcpschema.IndexRefreshRequest) (mcpschema.Envelope[mcpschema.IndexRefreshData], error) {
+	report, err := l.Index.IndexWorkspace(ctx, l.Root)
+	if err != nil {
+		return mcpschema.Envelope[mcpschema.IndexRefreshData]{}, err
+	}
+	envelope := mcpschema.Envelope[mcpschema.IndexRefreshData]{
+		OK: true,
+		Data: mcpschema.IndexRefreshData{
+			LocalRefreshed: true,
+			MutationResult: mcpschema.MutationResult{ChangedPaths: []mcpschema.ChangedPath{{
+				Path: ".cairn/index/cairn.db",
+				Kind: "updated",
+			}}},
+			Message: fmt.Sprintf("indexed %d managed documents", len(report.Indexed)),
+		},
+		Provenance: l.provenance("index_refresh"),
+	}
 	if l.RemoteIndex == nil {
-		report, err := l.Index.IndexWorkspace(ctx, l.Root)
-		if err != nil {
-			return mcpschema.Envelope[mcpschema.IndexRefreshData]{}, err
-		}
-		return mcpschema.Envelope[mcpschema.IndexRefreshData]{
-			OK: true,
-			Data: mcpschema.IndexRefreshData{
-				LocalRefreshed: true,
-				MutationResult: mcpschema.MutationResult{ChangedPaths: []mcpschema.ChangedPath{{
-					Path: ".cairn/index/cairn.db",
-					Kind: "updated",
-				}}},
-				Message: fmt.Sprintf("indexed %d managed documents", len(report.Indexed)),
-			},
-			NextSteps: []mcpschema.NextStep{{
-				Action: string(mcpschema.ToolSearchContext),
-				Label:  "Search local context",
-				Reason: "Local metadata index refresh completed.",
-			}},
-			Provenance: l.provenance("index_refresh"),
-		}, nil
+		envelope.NextSteps = []mcpschema.NextStep{{
+			Action: string(mcpschema.ToolSearchContext),
+			Label:  "Search local context",
+			Reason: "Local metadata index refresh completed.",
+		}}
+		return envelope, nil
 	}
 	response, err := l.RemoteIndex.Refresh(ctx, remoteindex.RefreshRequest{
 		WorkspaceID: l.provenance("index_refresh").WorkspaceID,
 		DryRun:      req.DryRun,
 	})
 	if err != nil {
-		return mcpschema.Envelope[mcpschema.IndexRefreshData]{
-			OK: false,
-			Warnings: []mcpschema.Warning{{
-				Code:    mcpschema.WarningRemoteService,
-				Message: "remote index refresh failed: " + err.Error(),
-			}},
-			Unavailable: []mcpschema.UnavailableMode{{
-				Mode:      "remote",
-				Reason:    mcpschema.WarningRemoteService,
-				Message:   "remote index refresh failed",
-				Retryable: true,
-			}},
-			NextSteps: []mcpschema.NextStep{{
+		envelope.OK = false
+		envelope.Warnings = []mcpschema.Warning{{
+			Code:    mcpschema.WarningRemoteService,
+			Message: "remote index refresh failed: " + err.Error(),
+		}}
+		envelope.Unavailable = []mcpschema.UnavailableMode{{
+			Mode:      "remote",
+			Reason:    mcpschema.WarningRemoteService,
+			Message:   "remote index refresh failed",
+			Retryable: true,
+		}}
+		envelope.NextSteps = []mcpschema.NextStep{
+			{
+				Action: string(mcpschema.ToolSearchContext),
+				Label:  "Use local search",
+				Reason: "Local index refresh completed before the remote refresh failed.",
+			},
+			{
 				Action: string(mcpschema.ToolIndexStatus),
 				Label:  "Check index availability",
 				Reason: "Inspect remote index health before retrying refresh.",
-			}},
-			Provenance: l.provenance("index_refresh"),
-		}, nil
+			},
+		}
+		return envelope, nil
 	}
-	envelope := mcpschema.Envelope[mcpschema.IndexRefreshData]{
-		OK: true,
-		Data: mcpschema.IndexRefreshData{
-			RemoteRefreshed: response.Refreshed,
-			Accepted:        response.Accepted,
-			JobID:           response.JobID,
-			LastRefreshAt:   response.LastRefreshAt,
-			Message:         response.Message,
-			MutationResult: mcpschema.MutationResult{ChangedPaths: []mcpschema.ChangedPath{{
-				Path: ".cairn/index/remote",
-				Kind: "refreshed",
-			}}},
-		},
-		Provenance: l.provenance("index_refresh"),
+	envelope.Data.RemoteRefreshed = response.Refreshed
+	envelope.Data.Accepted = response.Accepted
+	envelope.Data.JobID = response.JobID
+	envelope.Data.LastRefreshAt = response.LastRefreshAt
+	if response.Message != "" {
+		envelope.Data.Message = response.Message
+	}
+	if response.Accepted || response.Refreshed {
+		envelope.Data.ChangedPaths = append(envelope.Data.ChangedPaths, mcpschema.ChangedPath{
+			Path: ".cairn/index/remote",
+			Kind: "refreshed",
+		})
 	}
 	if response.Accepted && !response.Refreshed {
 		envelope.NextSteps = append(envelope.NextSteps, mcpschema.NextStep{
@@ -288,7 +311,7 @@ func (l *Local) IndexRefresh(ctx context.Context, req mcpschema.IndexRefreshRequ
 		envelope.NextSteps = append(envelope.NextSteps, mcpschema.NextStep{
 			Action: string(mcpschema.ToolSearchContext),
 			Label:  "Search refreshed context",
-			Reason: "Remote index refresh completed.",
+			Reason: "Local index refresh completed.",
 		})
 	}
 	return envelope, nil

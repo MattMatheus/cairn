@@ -85,6 +85,49 @@ remote_index:
 	}
 }
 
+func TestLoadConfigUsesLocalFSAndAzuriteSettings(t *testing.T) {
+	root := t.TempDir()
+	writeConfig(t, root, `schema_version: 1
+workspace_id: cairn:workspace:test
+managed_folders:
+  - working
+document_types:
+  note: working
+remote_sync:
+  provider: local_fs
+  root: /tmp/cairn-local-remote
+  prefix: pod-a
+`)
+
+	cfg, err := LoadConfig(root)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.RemoteSync.Provider != "local_fs" || cfg.RemoteSync.Root != "/tmp/cairn-local-remote" || cfg.RemoteSync.Prefix != "pod-a" {
+		t.Fatalf("unexpected local_fs config: %#v", cfg.RemoteSync)
+	}
+
+	writeConfig(t, root, `schema_version: 1
+workspace_id: cairn:workspace:test
+managed_folders:
+  - working
+document_types:
+  note: working
+remote_sync:
+  provider: azure_blob
+  endpoint: http://localhost:10000/devstoreaccount1
+  container: cairn
+  auth_mode: azurite
+`)
+	cfg, err = LoadConfig(root)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.RemoteSync.Provider != "azure_blob" || cfg.RemoteSync.Endpoint != "http://localhost:10000/devstoreaccount1" || cfg.RemoteSync.AuthMode != "azurite" {
+		t.Fatalf("unexpected azurite config: %#v", cfg.RemoteSync)
+	}
+}
+
 func TestLoadConfigUsesGeneratedPodRemoteProfileSettings(t *testing.T) {
 	root := t.TempDir()
 	writeConfig(t, root, `schema_version: 1
@@ -136,6 +179,29 @@ profiles:
 	findings := ValidateConfigFiles(root)
 	assertConfigFinding(t, findings, ".cairn/config.yaml", "error", "pod-remote account or endpoint is required when enabled")
 	assertConfigFinding(t, findings, ".cairn/config.yaml", "error", "pod-remote container is required when enabled")
+}
+
+func TestValidateConfigFilesAcceptsLocalFSPodRemote(t *testing.T) {
+	root := t.TempDir()
+	writeConfig(t, root, `schema_version: 1
+workspace_id: cairn:workspace:test
+managed_folders:
+  - working
+document_types:
+  note: working
+profiles:
+  pod-remote:
+    enabled: true
+    provider: local_fs
+    root: .cairn/local-remote
+`)
+
+	findings := ValidateConfigFiles(root)
+	for _, finding := range findings {
+		if finding.Severity == "error" {
+			t.Fatalf("unexpected error finding: %#v", findings)
+		}
+	}
 }
 
 func TestValidateConfigFilesReportsMalformedConfig(t *testing.T) {
