@@ -28,12 +28,14 @@ Create a workspace:
 ```sh
 WORK_ROOT="$(mktemp -d)/cairn-core"
 go run ./cmd/cairn --root "$WORK_ROOT" init --workspace-id cairn:workspace:core-dev
+go run ./cmd/cairn --root "$WORK_ROOT" doctor
 ```
 
 Add a local filesystem remote store to `$WORK_ROOT/.cairn/config.yaml`:
 
 ```sh
 go run ./cmd/cairn --root "$WORK_ROOT" setup local-sync --remote-root /tmp/cairn-local-remote
+go run ./cmd/cairn --root "$WORK_ROOT" doctor
 ```
 
 Exercise the local-first loop:
@@ -68,4 +70,4 @@ Run the broader preflight before inviting an engineer into a first pilot:
 deployments/local-dev/pilot-check.sh
 ```
 
-This runs the Go test suite, builds a throwaway binary, validates/searches `examples/pilot-workspace`, and then runs `core-smoke.sh`.
+This runs the Go test suite, builds a throwaway binary, checks `version` and `doctor`, validates/searches `examples/pilot-workspace`, and then runs `core-smoke.sh`.

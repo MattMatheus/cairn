@@ -11,11 +11,14 @@ import (
 	"strings"
 
 	"cairn/internal/document"
+	"cairn/internal/localindex"
 	"cairn/internal/mcpops"
 	"cairn/internal/mcpschema"
 	"cairn/internal/mcpserver"
 	"cairn/internal/workspace"
 )
+
+var Version = "dev"
 
 type options struct {
 	root string
@@ -36,6 +39,10 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, 
 	switch rest[0] {
 	case "setup":
 		runErr = runSetup(rest[1:], opts, stdout)
+	case "version":
+		runErr = runVersion(rest[1:], stdout)
+	case "doctor":
+		runErr = runDoctor(ctx, rest[1:], opts, stdout)
 	case "init":
 		runErr = runInit(rest[1:], opts, stdout)
 	case "capture":
@@ -100,19 +107,21 @@ func parseGlobal(args []string) (options, []string, error) {
 
 func runSetup(args []string, opts options, stdout io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: cairn setup local-sync --remote-root DIR")
+		return fmt.Errorf("usage: cairn setup local-sync --remote-root DIR | azure-sync --account ACCOUNT --container CONTAINER")
 	}
 	switch args[0] {
 	case "local-sync":
 		fs := newFlagSet("setup local-sync")
 		workspaceID := fs.String("workspace-id", "", "workspace id")
 		remoteRoot := fs.String("remote-root", "", "local filesystem remote store root")
+		force := fs.Bool("force", false, "allow setup inside the Cairn source repository")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
 		result, err := workspace.SetupLocalSync(opts.root, workspace.SetupLocalSyncOptions{
 			WorkspaceID: *workspaceID,
 			RemoteRoot:  *remoteRoot,
+			Force:       *force,
 		})
 		if err != nil {
 			return err
@@ -122,18 +131,65 @@ func runSetup(args []string, opts options, stdout io.Writer) error {
 		fmt.Fprintf(stdout, "Local remote root: %s\n", result.RemoteRoot)
 		fmt.Fprintln(stdout, "Next: run `cairn validate`, then `cairn sync status`.")
 		return nil
+	case "azure-sync":
+		fs := newFlagSet("setup azure-sync")
+		workspaceID := fs.String("workspace-id", "", "workspace id")
+		account := fs.String("account", "", "Azure Storage account name")
+		endpoint := fs.String("endpoint", "", "Azure Blob endpoint URL")
+		container := fs.String("container", "", "Azure Blob container")
+		prefix := fs.String("prefix", "", "optional object prefix")
+		force := fs.Bool("force", false, "allow setup inside the Cairn source repository")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		result, err := workspace.SetupAzureSync(opts.root, workspace.SetupAzureSyncOptions{
+			WorkspaceID: *workspaceID,
+			Account:     *account,
+			Endpoint:    *endpoint,
+			Container:   *container,
+			Prefix:      *prefix,
+			Force:       *force,
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "Initialized workspace %s\n", result.WorkspaceID)
+		fmt.Fprintf(stdout, "Configured Azure Blob sync in %s\n", result.ConfigPath)
+		if result.Account != "" {
+			fmt.Fprintf(stdout, "Storage account: %s\n", result.Account)
+		}
+		if result.Endpoint != "" {
+			fmt.Fprintf(stdout, "Blob endpoint: %s\n", result.Endpoint)
+		}
+		fmt.Fprintf(stdout, "Container: %s\n", result.Container)
+		if result.Prefix == "" {
+			fmt.Fprintln(stdout, "Prefix: <none>")
+		} else {
+			fmt.Fprintf(stdout, "Prefix: %s\n", result.Prefix)
+		}
+		fmt.Fprintln(stdout, "Next: run `az login`, then `cairn doctor --remote`.")
+		return nil
 	default:
-		return fmt.Errorf("usage: cairn setup local-sync --remote-root DIR")
+		return fmt.Errorf("usage: cairn setup local-sync --remote-root DIR | azure-sync --account ACCOUNT --container CONTAINER")
 	}
+}
+
+func runVersion(args []string, stdout io.Writer) error {
+	if len(args) != 0 {
+		return fmt.Errorf("usage: cairn version")
+	}
+	fmt.Fprintf(stdout, "cairn %s\n", Version)
+	return nil
 }
 
 func runInit(args []string, opts options, stdout io.Writer) error {
 	fs := newFlagSet("init")
 	workspaceID := fs.String("workspace-id", "", "workspace id")
+	force := fs.Bool("force", false, "allow init inside the Cairn source repository")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	result, err := workspace.Init(opts.root, workspace.InitOptions{WorkspaceID: *workspaceID})
+	result, err := workspace.Init(opts.root, workspace.InitOptions{WorkspaceID: *workspaceID, Force: *force})
 	if err != nil {
 		return err
 	}
@@ -141,6 +197,86 @@ func runInit(args []string, opts options, stdout io.Writer) error {
 	printPaths(stdout, "Created", result.Created)
 	printPaths(stdout, "Existing", result.Existing)
 	fmt.Fprintln(stdout, "Next: run `cairn validate` to check workspace health.")
+	return nil
+}
+
+func runDoctor(ctx context.Context, args []string, opts options, stdout io.Writer) error {
+	fs := newFlagSet("doctor")
+	checkRemote := fs.Bool("remote", false, "check remote store reachability")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return fmt.Errorf("usage: cairn doctor [--remote]")
+	}
+	absRoot, err := filepath.Abs(opts.root)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "Cairn version: %s\n", Version)
+	fmt.Fprintf(stdout, "Workspace root: %s\n", absRoot)
+
+	configPath := filepath.Join(absRoot, ".cairn", "config.yaml")
+	if _, err := os.Stat(configPath); err != nil {
+		if os.IsNotExist(err) {
+			fmt.Fprintln(stdout, "Config: missing")
+			fmt.Fprintln(stdout, "Next: run `cairn init` or a setup command such as `cairn setup local-sync --remote-root DIR`.")
+			return nil
+		}
+		return err
+	}
+	fmt.Fprintln(stdout, "Config: present")
+	cfg, err := document.LoadConfig(absRoot)
+	if err != nil {
+		return err
+	}
+	if cfg.WorkspaceID != "" {
+		fmt.Fprintf(stdout, "Workspace id: %s\n", cfg.WorkspaceID)
+	}
+	if _, err := os.Stat(localindex.DBPath(absRoot)); err == nil {
+		fmt.Fprintln(stdout, "Local index: present")
+	} else if os.IsNotExist(err) {
+		fmt.Fprintln(stdout, "Local index: missing")
+		fmt.Fprintln(stdout, "Next: run `cairn index refresh`.")
+	} else {
+		return err
+	}
+
+	switch cfg.RemoteSync.Provider {
+	case "":
+		fmt.Fprintln(stdout, "Remote sync: not configured")
+		fmt.Fprintln(stdout, "Next: run `cairn setup local-sync --remote-root DIR` or `cairn setup azure-sync --account ACCOUNT --container CONTAINER`.")
+	case "local_fs":
+		fmt.Fprintf(stdout, "Remote sync: local_fs (%s)\n", cfg.RemoteSync.Root)
+	case "azure_blob":
+		if cfg.RemoteSync.Endpoint != "" {
+			fmt.Fprintf(stdout, "Remote sync: azure_blob (%s, container %s)\n", cfg.RemoteSync.Endpoint, cfg.RemoteSync.Container)
+		} else {
+			fmt.Fprintf(stdout, "Remote sync: azure_blob (%s, container %s)\n", cfg.RemoteSync.Account, cfg.RemoteSync.Container)
+		}
+		if cfg.RemoteSync.Prefix == "" {
+			fmt.Fprintln(stdout, "Remote prefix: <none>")
+		} else {
+			fmt.Fprintf(stdout, "Remote prefix: %s\n", cfg.RemoteSync.Prefix)
+		}
+	default:
+		fmt.Fprintf(stdout, "Remote sync: unsupported provider %s\n", cfg.RemoteSync.Provider)
+	}
+
+	if *checkRemote {
+		local, err := mcpops.OpenLocal(absRoot)
+		if err != nil {
+			return err
+		}
+		defer local.Close()
+		if local.RemoteStore == nil {
+			fmt.Fprintln(stdout, "Remote check: skipped, remote sync is not configured")
+		} else if _, err := local.RemoteStore.ListObjects(ctx, ""); err != nil {
+			return fmt.Errorf("remote check failed: %w", err)
+		} else {
+			fmt.Fprintln(stdout, "Remote check: reachable")
+		}
+	}
 	return nil
 }
 
@@ -435,7 +571,7 @@ func newFlagSet(name string) *flag.FlagSet {
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: cairn [--root DIR] <command> [options]")
-	fmt.Fprintln(w, "commands: setup local-sync, init, capture, promote, archive, purge, validate, search, index status, sync status, mcp readonly|local-writes|remote-writes")
+	fmt.Fprintln(w, "commands: version, doctor, setup local-sync|azure-sync, init, capture, promote, archive, purge, validate, search, index status, sync status, mcp readonly|local-writes|remote-writes")
 }
 
 func runMCP(ctx context.Context, args []string, opts options, stdin io.Reader, stdout io.Writer) error {
@@ -494,7 +630,7 @@ func runSync(ctx context.Context, args []string, opts options, stdout io.Writer)
 	if args[0] == "pull" {
 		envelope, err := local.SyncPull(ctx, mcpschema.SyncRequest{})
 		if err != nil {
-			return err
+			return friendlySyncError(err)
 		}
 		fmt.Fprintf(stdout, "Sync pull applied: %t\n", envelope.Data.Applied)
 		for _, changed := range envelope.Data.ChangedPaths {
@@ -508,7 +644,7 @@ func runSync(ctx context.Context, args []string, opts options, stdout io.Writer)
 	if args[0] == "push" {
 		envelope, err := local.SyncPush(ctx, mcpschema.SyncRequest{})
 		if err != nil {
-			return err
+			return friendlySyncError(err)
 		}
 		fmt.Fprintf(stdout, "Sync push applied: %t\n", envelope.Data.Applied)
 		for _, changed := range envelope.Data.ChangedPaths {
@@ -543,4 +679,14 @@ func runSync(ctx context.Context, args []string, opts options, stdout io.Writer)
 		fmt.Fprintf(stdout, "Next: %s\n", step.Label)
 	}
 	return nil
+}
+
+func friendlySyncError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if strings.Contains(err.Error(), "remote store is required") {
+		return errors.New("remote sync is not configured; run `cairn setup local-sync --remote-root DIR` for a no-service pilot or `cairn setup azure-sync --account ACCOUNT --container CONTAINER` for Azure Blob")
+	}
+	return err
 }

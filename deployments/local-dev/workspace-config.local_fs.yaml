@@ -30,4 +30,4 @@ profiles:
 remote_sync:
   provider: local_fs
   root: /tmp/cairn-local-remote
-required_skills: []
+required_skills:

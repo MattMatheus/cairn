@@ -40,7 +40,7 @@ func TestRunInitValidateAndSearch(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("validate code=%d stderr=%s", code, stderr)
 	}
-	if !strings.Contains(stdout, "Workspace validation passed with warnings.") {
+	if !strings.Contains(stdout, "Workspace validation passed.") {
 		t.Fatalf("unexpected validate stdout:\n%s", stdout)
 	}
 
@@ -70,6 +70,53 @@ func TestRunSetupLocalSyncCreatesConfig(t *testing.T) {
 	config := readFile(t, root, ".cairn/config.yaml")
 	if !strings.Contains(config, "remote_sync:") || !strings.Contains(config, "provider: local_fs") || !strings.Contains(config, "root: "+strconv.Quote(remoteRoot)) {
 		t.Fatalf("config missing local sync block:\n%s", config)
+	}
+}
+
+func TestRunSetupAzureSyncCreatesConfig(t *testing.T) {
+	root := t.TempDir()
+
+	stdout, stderr, code := run(t, "--root", root, "setup", "azure-sync", "--workspace-id", "cairn:workspace:test", "--account", "cairnpilot", "--container", "pod-a")
+	if code != 0 {
+		t.Fatalf("setup failed code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "Configured Azure Blob sync in .cairn/config.yaml") || !strings.Contains(stdout, "Prefix: <none>") {
+		t.Fatalf("unexpected setup stdout:\n%s", stdout)
+	}
+	config := readFile(t, root, ".cairn/config.yaml")
+	for _, expected := range []string{"remote_sync:", "provider: azure_blob", "account: \"cairnpilot\"", "container: \"pod-a\""} {
+		if !strings.Contains(config, expected) {
+			t.Fatalf("config missing %q:\n%s", expected, config)
+		}
+	}
+}
+
+func TestRunVersionAndDoctor(t *testing.T) {
+	root := t.TempDir()
+
+	stdout, stderr, code := run(t, "version")
+	if code != 0 {
+		t.Fatalf("version code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "cairn dev") {
+		t.Fatalf("unexpected version stdout:\n%s", stdout)
+	}
+
+	stdout, stderr, code = run(t, "--root", root, "doctor")
+	if code != 0 {
+		t.Fatalf("doctor code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Config: missing") {
+		t.Fatalf("unexpected doctor stdout:\n%s", stdout)
+	}
+
+	runOK(t, "--root", root, "setup", "local-sync", "--remote-root", filepath.Join(t.TempDir(), "remote"))
+	stdout, stderr, code = run(t, "--root", root, "doctor")
+	if code != 0 {
+		t.Fatalf("doctor configured code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Config: present") || !strings.Contains(stdout, "Remote sync: local_fs") {
+		t.Fatalf("unexpected doctor configured stdout:\n%s", stdout)
 	}
 }
 
@@ -146,6 +193,19 @@ func TestRunPromoteArchiveAndIndexStatus(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "Sync dry-run direction: push") {
 		t.Fatalf("unexpected sync dry-run stdout:\n%s", stdout)
+	}
+}
+
+func TestRunSyncPushWithoutRemoteSuggestsSetup(t *testing.T) {
+	root := t.TempDir()
+	runOK(t, "--root", root, "init")
+
+	_, stderr, code := run(t, "--root", root, "sync", "push")
+	if code == 0 {
+		t.Fatalf("expected sync push without remote to fail")
+	}
+	if !strings.Contains(stderr, "remote sync is not configured") || !strings.Contains(stderr, "setup azure-sync") {
+		t.Fatalf("unexpected stderr:\n%s", stderr)
 	}
 }
 

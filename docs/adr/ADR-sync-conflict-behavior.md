@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-Cairn v1 uses on-demand workspace sync through CLI and MCP. Azure Blob storage is the first shared backend, with one storage account per pod for isolation, cost attribution, and simpler operations. Cloud drive sync, OneDrive, Git-backed sync, automatic merge tooling, and cross-pod federation are out of scope.
+Cairn v1 uses on-demand workspace sync through CLI and MCP. Azure Blob storage is the first shared backend, with one container per pod for the initial pilot boundary. Multiple storage accounts may be introduced later for isolation, cost attribution, or operations. Cloud drive sync, OneDrive, Git-backed sync, automatic merge tooling, and cross-pod federation are out of scope.
 
 The sync system must preserve the file-first model while avoiding silent corruption when local and remote work diverge.
 

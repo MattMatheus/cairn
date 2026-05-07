@@ -66,3 +66,32 @@ func TestSetupLocalSyncRequiresRemoteRoot(t *testing.T) {
 		t.Fatalf("expected remote root requirement")
 	}
 }
+
+func TestSetupAzureSyncInitializesWorkspaceAndConfiguresRemote(t *testing.T) {
+	root := t.TempDir()
+
+	result, err := SetupAzureSync(root, SetupAzureSyncOptions{
+		WorkspaceID: "cairn:workspace:pilot",
+		Account:     "cairnpilot",
+		Container:   "pod-a",
+	})
+	if err != nil {
+		t.Fatalf("SetupAzureSync() error = %v", err)
+	}
+	if result.WorkspaceID != "cairn:workspace:pilot" || result.ConfigPath != ".cairn/config.yaml" {
+		t.Fatalf("unexpected setup result: %#v", result)
+	}
+	cfg, err := document.LoadConfig(root)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.RemoteSync.Provider != "azure_blob" || cfg.RemoteSync.Account != "cairnpilot" || cfg.RemoteSync.Container != "pod-a" || cfg.RemoteSync.Prefix != "" {
+		t.Fatalf("unexpected remote sync config: %#v", cfg.RemoteSync)
+	}
+}
+
+func TestSetupAzureSyncRequiresContainer(t *testing.T) {
+	if _, err := SetupAzureSync(t.TempDir(), SetupAzureSyncOptions{Account: "cairnpilot"}); err == nil {
+		t.Fatalf("expected container requirement")
+	}
+}

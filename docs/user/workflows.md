@@ -82,10 +82,9 @@ Ignored paths are skipped by validation, indexing/search, and sync manifests.
 
 Use `local_fs` when you want to test shared sync without cloud services:
 
-```yaml
-remote_sync:
-  provider: local_fs
-  root: /tmp/cairn-local-remote
+```sh
+cairn setup local-sync --remote-root /tmp/cairn-local-remote
+cairn doctor
 ```
 
 Then use:
@@ -104,8 +103,9 @@ The same conflict rule applies locally and remotely: if both sides changed since
 Before relying on Azure Blob sync:
 
 - Azure CLI login works for the pod tenant.
-- `.cairn/config.yaml` has `remote_sync` values.
+- `cairn setup azure-sync --account ACCOUNT --container CONTAINER` has configured the workspace.
 - No secrets are stored in workspace config.
+- `cairn doctor --remote` reports the remote store is reachable.
 - `cairn sync status` reports remote state without auth failures.
 
 Remote indexer and semantic search settings are optional/deferred rich-retrieval work for v1. They are not required for local search, local index refresh, or blob sync.

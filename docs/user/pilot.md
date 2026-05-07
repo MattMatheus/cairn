@@ -6,7 +6,7 @@ This guide is the first-run path for a friendly engineering pilot. The goal is t
 
 A pilot engineer should be able to:
 
-- build or run Cairn from the repo
+- install a released Cairn binary into userland
 - initialize a fresh workspace with `cairn init`
 - confirm `.cairn/config.yaml` exists
 - configure no-service sync with `cairn setup local-sync`
@@ -34,20 +34,21 @@ Expected final line:
 Pilot check passed.
 ```
 
-This runs the Go test suite, builds a binary, validates and searches the example workspace, and runs the no-service sync smoke.
+This runs the Go test suite, builds a throwaway binary, validates and searches the example workspace, and runs the no-service sync smoke.
 
 ## Pilot Setup
 
-From the repo root:
+Install Cairn into userland. Pilots should not need the Go toolchain or a repository-local `bin/` shim:
 
 ```sh
-export CAIRN_REPO="$PWD"
-go build -o ./bin/cairn ./cmd/cairn
-export PATH="$PWD/bin:$PATH"
-cairn help
+curl -fsSL https://raw.githubusercontent.com/MattMatheus/cairn/main/scripts/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+cairn version
 ```
 
-Expected: the help output starts with `usage: cairn`.
+Expected: Cairn prints its version. For unreleased internal builds, install the attached pilot binary to `~/.local/bin/cairn` and run the same `cairn version` check.
+
+Do not run `cairn init` inside the Cairn source repository. Use `--root` with a normal workspace directory as shown below.
 
 ## Initialize A Fresh Workspace
 
@@ -57,6 +58,7 @@ Create and initialize a throwaway workspace:
 WORK_ROOT="$(mktemp -d)/cairn-pilot"
 cairn --root "$WORK_ROOT" init --workspace-id cairn:workspace:pilot
 test -f "$WORK_ROOT/.cairn/config.yaml"
+cairn --root "$WORK_ROOT" doctor
 ```
 
 Expected:
@@ -73,6 +75,7 @@ Run the setup helper so you do not have to edit YAML by hand:
 
 ```sh
 cairn --root "$WORK_ROOT" setup local-sync --remote-root /tmp/cairn-pilot-remote
+cairn --root "$WORK_ROOT" doctor
 ```
 
 Expected:
@@ -203,5 +206,5 @@ Ask the pilot engineer to write down:
 
 - Search is local metadata and full text, not semantic retrieval.
 - `local_fs` is a no-service blob-style remote store for pilot testing, not production storage.
-- Azure Blob is an advanced sync path and is not part of the first pilot script.
+- Azure Blob is the multiplayer backend path. It is documented in [Azure Blob Sync](azure-sync.md), but is not required for the first no-service pilot script.
 - Remote indexer and CocoIndex work are deferred until the core workflow survives pilot feedback.
