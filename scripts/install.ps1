@@ -6,6 +6,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+if ($Repo -notmatch '^[^/\\:]+/[^/\\:]+$') {
+  Write-Warning "Ignoring CAIRN_REPO=$Repo; expected GitHub owner/repo such as MattMatheus/cairn."
+  $Repo = "MattMatheus/cairn"
+}
+
 $processorArch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
 $arch = switch ($processorArch) {
   "AMD64" { "amd64" }
