@@ -166,10 +166,9 @@ func (l *Local) IndexStatus(ctx context.Context, _ mcpschema.IndexStatusRequest)
 	envelope := mcpschema.Envelope[mcpschema.IndexStatusData]{
 		OK: true,
 		Data: mcpschema.IndexStatusData{
-			LocalAvailable:  localAvailable,
-			RemoteAvailable: false,
-			Fresh:           localAvailable,
-			LastRefreshAt:   lastRefresh,
+			LocalAvailable: localAvailable,
+			Fresh:          localAvailable,
+			LastRefreshAt:  lastRefresh,
 		},
 		Provenance: l.provenance("local_index"),
 	}
@@ -189,52 +188,46 @@ func (l *Local) IndexStatus(ctx context.Context, _ mcpschema.IndexStatusRequest)
 		}
 		return envelope, nil
 	}
-	response, err := l.RemoteIndex.Status(ctx, remoteindex.StatusRequest{
+	remote, err := l.RemoteIndex.Status(ctx, remoteindex.StatusRequest{
 		WorkspaceID: l.provenance("index_status").WorkspaceID,
 	})
-	if err == nil {
-		envelope.Data.RemoteAvailable = response.Available
-		envelope.Data.Fresh = envelope.Data.Fresh || response.Fresh
-		if response.LastRefreshAt.After(envelope.Data.LastRefreshAt) {
-			envelope.Data.LastRefreshAt = response.LastRefreshAt
-		}
-		if response.Available {
-			envelope.Provenance = l.provenance("remote_indexer")
-			if !localAvailable {
-				envelope.NextSteps = append(envelope.NextSteps, mcpschema.NextStep{
-					Action: string(mcpschema.ToolIndexRefresh),
-					Label:  "Refresh local index",
-					Reason: "Create the local SQLite index for local-first search.",
-				})
-			}
-			return envelope, nil
-		}
-	}
-	message := "remote indexer is unavailable"
 	if err != nil {
-		message = "remote indexer is unavailable: " + err.Error()
-	}
-	envelope.Warnings = append(envelope.Warnings, mcpschema.Warning{
-		Code:    mcpschema.WarningRemoteService,
-		Message: message,
-	})
-	envelope.Unavailable = append(envelope.Unavailable, mcpschema.UnavailableMode{
-		Mode:      "remote",
-		Reason:    mcpschema.WarningRemoteService,
-		Message:   "remote indexer is not available",
-		Retryable: true,
-	})
-	if !localAvailable {
-		envelope.NextSteps = append(envelope.NextSteps, mcpschema.NextStep{
-			Action: string(mcpschema.ToolIndexRefresh),
-			Label:  "Refresh local index",
-			Reason: "Create the local SQLite index for local-first search.",
+		envelope.Warnings = append(envelope.Warnings, mcpschema.Warning{
+			Code:    mcpschema.WarningRemoteService,
+			Message: "remote indexer status failed: " + err.Error(),
 		})
+		envelope.Unavailable = append(envelope.Unavailable, mcpschema.UnavailableMode{
+			Mode:      "remote",
+			Reason:    mcpschema.WarningRemoteService,
+			Message:   "remote indexer unreachable",
+			Retryable: true,
+		})
+		if !localAvailable {
+			envelope.NextSteps = append(envelope.NextSteps, mcpschema.NextStep{
+				Action: string(mcpschema.ToolIndexRefresh),
+				Label:  "Refresh local index",
+				Reason: "Create the local SQLite index for local-first search.",
+			})
+		}
+		envelope.NextSteps = append(envelope.NextSteps, mcpschema.NextStep{
+			Action: string(mcpschema.ToolIndexStatus),
+			Label:  "Retry remote index status",
+			Reason: "Remote index health could not be confirmed.",
+		})
+		return envelope, nil
+	}
+	remoteStatus := remote.SchemaStatus()
+	envelope.Data.RemoteAvailable = remoteStatus.RemoteAvailable
+	if remoteStatus.Fresh {
+		envelope.Data.Fresh = true
+	}
+	if !remoteStatus.LastRefreshAt.IsZero() {
+		envelope.Data.LastRefreshAt = remoteStatus.LastRefreshAt
 	}
 	envelope.NextSteps = append(envelope.NextSteps, mcpschema.NextStep{
-		Action: string(mcpschema.ToolIndexStatus),
-		Label:  "Retry remote index status",
-		Reason: "Remote index health could not be confirmed.",
+		Action: string(mcpschema.ToolSearchContext),
+		Label:  "Search context",
+		Reason: "Remote indexer is available.",
 	})
 	return envelope, nil
 }
