@@ -6,18 +6,33 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$arch = switch ($env:PROCESSOR_ARCHITECTURE) {
+if ($Repo -notmatch '^[^/\\:]+/[^/\\:]+$') {
+  Write-Warning "Ignoring CAIRN_REPO=$Repo; expected GitHub owner/repo such as MattMatheus/cairn."
+  $Repo = "MattMatheus/cairn"
+}
+
+$processorArch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+$arch = switch ($processorArch) {
   "AMD64" { "amd64" }
   "ARM64" { "arm64" }
-  default { throw "Unsupported architecture: $env:PROCESSOR_ARCHITECTURE" }
+  default { throw "Unsupported architecture: $processorArch" }
 }
 
 $asset = "cairn_windows_${arch}.zip"
 if ($Version -eq "latest") {
-  $url = "https://github.com/$Repo/releases/latest/download/$asset"
-} else {
-  $url = "https://github.com/$Repo/releases/download/$Version/$asset"
+  try {
+    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest"
+    $Version = $release.tag_name
+  } catch {
+    $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases?per_page=20"
+    $release = $releases | Select-Object -First 1
+    if (-not $release -or -not $release.tag_name) {
+      throw "Could not find a published Cairn release. Set CAIRN_VERSION to a tag such as v0.1."
+    }
+    $Version = $release.tag_name
+  }
 }
+$url = "https://github.com/$Repo/releases/download/$Version/$asset"
 
 $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName())
 New-Item -ItemType Directory -Path $tmp | Out-Null

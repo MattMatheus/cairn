@@ -5,6 +5,18 @@ repo="${CAIRN_REPO:-MattMatheus/cairn}"
 version="${CAIRN_VERSION:-latest}"
 install_dir="${CAIRN_INSTALL_DIR:-$HOME/.local/bin}"
 
+case "$repo" in
+  */*/*|/*|*"://"*|"" )
+    echo "Ignoring CAIRN_REPO=$repo; expected GitHub owner/repo such as MattMatheus/cairn." >&2
+    repo="MattMatheus/cairn"
+    ;;
+  */*) ;;
+  *)
+    echo "Ignoring CAIRN_REPO=$repo; expected GitHub owner/repo such as MattMatheus/cairn." >&2
+    repo="MattMatheus/cairn"
+    ;;
+esac
+
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 arch="$(uname -m)"
 case "$arch" in
@@ -19,11 +31,21 @@ case "$os" in
 esac
 
 asset="cairn_${os}_${arch}.tar.gz"
+
 if [ "$version" = "latest" ]; then
-  url="https://github.com/${repo}/releases/latest/download/${asset}"
-else
-  url="https://github.com/${repo}/releases/download/${version}/${asset}"
+  latest_json="$(curl -fsSL "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null || true)"
+  version="$(printf '%s' "$latest_json" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+  if [ -z "$version" ]; then
+    releases_json="$(curl -fsSL "https://api.github.com/repos/${repo}/releases?per_page=20" 2>/dev/null || true)"
+    version="$(printf '%s' "$releases_json" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+  fi
+  if [ -z "$version" ]; then
+    echo "could not find a published Cairn release; set CAIRN_VERSION to a tag such as v0.1" >&2
+    exit 1
+  fi
 fi
+
+url="https://github.com/${repo}/releases/download/${version}/${asset}"
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
