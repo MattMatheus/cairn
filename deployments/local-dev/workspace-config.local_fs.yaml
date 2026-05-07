@@ -1,0 +1,33 @@
+schema_version: 1
+workspace_id: cairn:workspace:local-dev
+managed_folders:
+  - inbox
+  - agents
+  - working
+  - decisions
+  - runbooks
+  - projects
+  - services
+  - handoffs
+  - onboarding
+  - archive
+document_types:
+  note: inbox
+  handoff: handoffs
+  investigation: working
+  decision: decisions
+  runbook: runbooks
+  project: projects
+  service: services
+  onboarding: onboarding
+profiles:
+  local:
+    enabled: true
+  pod-remote:
+    enabled: false
+    provider: local_fs
+    root: ""
+remote_sync:
+  provider: local_fs
+  root: /tmp/cairn-local-remote
+required_skills: []

@@ -78,12 +78,34 @@ Ignored paths are skipped by validation, indexing/search, and sync manifests.
 - `cairn sync dry-run` is clean or shows expected pull/push changes.
 - `AGENTS.md` and `CLAUDE.md` stay short and point agents to onboarding docs.
 
+## Local Sync Checklist
+
+Use `local_fs` when you want to test shared sync without cloud services:
+
+```yaml
+remote_sync:
+  provider: local_fs
+  root: /tmp/cairn-local-remote
+```
+
+Then use:
+
+```sh
+cairn sync status
+cairn sync dry-run
+cairn sync push
+cairn sync pull
+```
+
+The same conflict rule applies locally and remotely: if both sides changed since the last accepted base, Cairn refuses the mutation and asks for manual reconciliation.
+
 ## Remote Profile Checklist
 
-Before relying on remote sync or indexing:
+Before relying on Azure Blob sync:
 
 - Azure CLI login works for the pod tenant.
-- `.cairn/config.yaml` has `remote_sync` and `remote_index` values.
+- `.cairn/config.yaml` has `remote_sync` values.
 - No secrets are stored in workspace config.
 - `cairn sync status` reports remote state without auth failures.
-- `cairn index status` reports remote availability or a clear degraded mode.
+
+Remote indexer and semantic search settings are optional/deferred rich-retrieval work for v1. They are not required for local search, local index refresh, or blob sync.

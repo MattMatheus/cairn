@@ -87,20 +87,16 @@ func (i *Index) Search(ctx context.Context, root string, opts SearchOptions) (mc
 		}
 		results = appendUniqueResults(results, fullTextResults, limit)
 
-		attempted = append(attempted, mcpschema.SearchModeSemantic)
-		remoteResults, remoteOK, err := remoteSemanticSearch(ctx, opts, limit)
-		if err != nil {
-			return envelope, err
-		}
-		if remoteOK {
+		if opts.Remote != nil {
+			attempted = append(attempted, mcpschema.SearchModeSemantic)
+			remoteResults, _, err := remoteSemanticSearch(ctx, opts, limit)
+			if err != nil {
+				return envelope, err
+			}
 			results = appendUniqueResults(results, remoteResults.Data.Results, limit)
 			envelope.Warnings = append(envelope.Warnings, remoteResults.Warnings...)
 			envelope.Unavailable = append(envelope.Unavailable, remoteResults.Unavailable...)
 			envelope.NextSteps = append(envelope.NextSteps, remoteResults.NextSteps...)
-		} else {
-			envelope.Warnings = append(envelope.Warnings, unavailableSemanticWarning(), unavailableRemoteWarning())
-			envelope.Unavailable = append(envelope.Unavailable, unavailableSemanticMode(), unavailableRemoteMode())
-			envelope.NextSteps = append(envelope.NextSteps, checkIndexStatusStep())
 		}
 		envelope.Data = mcpschema.SearchContextData{Results: results, AttemptedModes: attempted}
 	}

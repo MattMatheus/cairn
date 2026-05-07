@@ -6,7 +6,8 @@ Cairn is a local-first markdown context layer for small engineering pods. It giv
 
 - [Quickstart](docs/user/quickstart.md)
 - [Daily Workflows](docs/user/workflows.md)
-- [Infra Prep Checklist](deployments/azure-container-apps-indexer/INFRA-PREP.md)
+- [Pilot Guide](docs/user/pilot.md)
+- [Local Development Harness](deployments/local-dev/README.md)
 - [Architecture Decisions](docs/adr/README.md)
 
 ## Build
@@ -23,4 +24,18 @@ go run ./cmd/cairn help
 
 ## Current Shape
 
-Cairn is usable locally without remote infrastructure. Azure Blob sync and the remote indexer are wired behind configuration boundaries, but live remote use still requires Azure resources, auth, and deployment setup.
+Cairn Core v1 is local-first: documents are visible markdown files, search/indexing is local SQLite metadata and full text, and remote sharing is blob-backed sync with conflict refusal. The default quickstart does not require Docker, Postgres, pgvector, CocoIndex, or a remote indexer.
+
+For no-service sync development, use the `local_fs` remote-store example in the quickstart. `deployments/local-dev/` contains the no-service local smoke and sample config for that path.
+
+Run the no-service Cairn Core smoke with:
+
+```sh
+deployments/local-dev/core-smoke.sh
+```
+
+Run the full pilot readiness check with:
+
+```sh
+make pilot-check
+```

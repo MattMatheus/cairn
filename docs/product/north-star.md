@@ -24,7 +24,8 @@ The initial internal use case is supporting agentic pod engineering work, where 
 - Permanent deletion is human-controlled through CLI-only purge commands.
 - Per-pod isolation is a product boundary for v1.
 - Cloud drive sync is out of scope.
-- CocoIndex should power derived context rather than be reimplemented.
+- Local SQLite metadata and full-text search are the Cairn Core v1 retrieval path.
+- CocoIndex should power future rich derived context rather than be reimplemented in core.
 
 ## Product Layers
 
@@ -34,12 +35,12 @@ Cairn has three conceptual layers:
    Markdown files, frontmatter, folder layout, ignore rules, and sync metadata.
 
 2. Cairn control plane
-   Workspace config, schemas, document lifecycle, MCP tools, actor identity, promotion, validation, bootstrap, and Azure Blob sync.
+   Workspace config, schemas, document lifecycle, MCP tools, actor identity, promotion, validation, bootstrap, local indexing, and blob-backed sync.
 
-3. Derived context engine
-   CocoIndex-backed indexing for search, semantic retrieval, summaries, graph extraction, and future richer context features.
+3. Rich derived context engine
+   Deferred/optional CocoIndex-backed indexing for semantic retrieval, summaries, graph extraction, and future richer context features.
 
-The control plane must not depend on every derived index being available. Cairn should remain useful as a local markdown/MCP/sync tool even when the indexer is disabled.
+The control plane must not depend on the rich derived context engine being available. Cairn Core v1 should remain useful as a local markdown/MCP/sync tool without CocoIndex, Postgres, pgvector, Docker, or a remote indexer.
 
 ## Workspace Scope
 
@@ -287,7 +288,7 @@ Archive and move operations are exposed through MCP. Purge/delete is CLI-only.
 
 ## Auth
 
-Cairn should assume Azure CLI login for v1.
+Cairn should assume no auth for local-only work and local filesystem remote-store development. For Azure Blob sync, Cairn should use Azure CLI login by default.
 
 The CLI may shell out to:
 
@@ -297,7 +298,7 @@ az account get-access-token
 
 to obtain bearer tokens. This aligns with existing Azure DevOps skill usage and avoids requiring VPN-only access patterns.
 
-The same Azure CLI identity should be the default credential source for Azure Blob sync and for remote indexer calls when the `pod-remote` profile is active. The remote indexer should validate that identity through Azure-managed auth or an equivalent bearer-token flow. Cairn should not introduce a separate secret-bearing credential path in v1.
+The same Azure CLI identity may be used for future remote indexer calls when a rich-retrieval profile is configured. Remote indexer production auth is deferred until that service is promoted back into active scope. Cairn should not introduce a separate secret-bearing credential path in v1.
 
 No secrets should be stored in `.cairn/config.yaml`.
 
@@ -310,25 +311,24 @@ local
 pod-remote
 ```
 
-`local` is for local-only operation. `pod-remote` enables Azure Blob sync and remote indexer access.
+`local` is for local-only operation. `pod-remote` enables remote blob sync. Remote indexer access is optional/deferred rich-retrieval configuration, not part of the v1 default path.
 
 MCP tools may use the `pod-remote` profile when configured.
 
 ## Indexing
 
-Indexing is optional but strongly recommended.
+Local indexing is required for Cairn Core v1 search. Rich remote indexing is optional and deferred.
 
-Cairn should integrate CocoIndex from the start through an indexer boundary rather than reimplementing semantic indexing, incremental processing, entity extraction, or graph features.
+Cairn Core v1 uses local SQLite metadata and local full-text lookup. CocoIndex should power future rich retrieval through an indexer boundary rather than being reimplemented in core, but it is not required for first adoption.
 
-The core Cairn binary should remain useful without an indexer. When available, the indexer provides richer derived context.
+The core Cairn binary should remain useful without a remote indexer. When a future rich-retrieval adapter is available, it can provide richer derived context behind the stable query contract.
 
-Initial indexing architecture:
+Core v1 indexing architecture:
 
 - Cairn core is a self-contained Go CLI/MCP binary.
-- A local indexer may run in Docker or Podman.
-- An Azure Container Apps indexer should be part of the early architecture.
-- v1 may run one indexer per pod to simplify isolation, locking, cost attribution, and operations.
-- Index outputs live in the same pod storage account.
+- Local SQLite metadata and full-text indexing live under the workspace.
+- No Docker, Postgres, pgvector, CocoIndex, or remote indexer is required for default local development.
+- Blob sync shares documents and control metadata, not generated rich index artifacts.
 - Indexes remain pod-scoped; org-wide indexing is out of scope.
 
 Cairn maintains a lightweight local SQLite metadata index at:
@@ -339,9 +339,9 @@ Cairn maintains a lightweight local SQLite metadata index at:
 
 for fast title, slug, tag, status, type, path, actor, source, and recent-change lookups.
 
-Cairn owns document discovery, frontmatter parsing, validation state, local metadata lookup, local full-text lookup, and the MCP/CLI query contract. CocoIndex owns richer derived index artifacts through its pipelines, including semantic embeddings, richer summaries, entity extraction, graph features, and incremental processing beyond Cairn's lightweight metadata index. Cairn should define stable query contracts rather than depending on every artifact format directly.
+Cairn owns document discovery, frontmatter parsing, validation state, local metadata lookup, local full-text lookup, and the MCP/CLI query contract. CocoIndex may later own richer derived index artifacts through its pipelines, including semantic embeddings, richer summaries, entity extraction, graph features, and incremental processing beyond Cairn's lightweight metadata index. Cairn should define stable query contracts rather than depending on every artifact format directly.
 
-The remote indexer should expose HTTP endpoints such as:
+A future remote indexer may expose HTTP endpoints such as:
 
 ```text
 /index/status
@@ -353,12 +353,11 @@ Search order:
 
 1. local metadata
 2. local full-text
-3. local semantic index when available
-4. remote indexer when configured
+3. optional rich semantic adapter when configured and available
 
 `sync_pull` should suggest an index refresh after new changes arrive.
 
-Index artifacts are not normal document sync by default. `sync_push` uploads workspace documents and control metadata. Index refresh publishes or updates index artifacts separately.
+Index artifacts are not normal document sync by default. `sync_push` uploads workspace documents and control metadata. Core v1 index refresh rebuilds local SQLite state. Future rich index refresh may publish or update derived artifacts separately.
 
 ## Search And Read Tools
 
@@ -406,7 +405,7 @@ Search results should include enough metadata for agents to identify and choose 
   "tags": ["auth", "timeouts"],
   "updated": "2026-05-02T12:00:00Z",
   "score": 0.91,
-  "match_type": "semantic",
+  "match_type": "full_text",
   "snippet": "Retry auth token requests with bounded exponential backoff...",
   "provenance": {
     "authors": ["matt"],
@@ -546,14 +545,15 @@ The first ADR batch should cover:
 - Secret storage.
 - Retention policy.
 - MCP hard delete.
+- Required CocoIndex, pgvector, Postgres, or remote indexer setup for the default v1 path.
 - Mobile app.
 - Hosted SaaS business model.
 
 ## Open Questions
 
-- Exact CocoIndex pipeline contracts and artifact formats.
-- Local indexer packaging details.
-- ACA indexer deployment details and exact auth enforcement mechanism.
+- Exact future CocoIndex pipeline contracts and artifact formats.
+- Future local/remote indexer packaging details.
+- Production hosting details and exact auth enforcement mechanism for optional remote indexer work.
 - Azure Blob manifest schema.
 - YAML schema format for built-in and custom document types.
 - Initial command and MCP API schemas.

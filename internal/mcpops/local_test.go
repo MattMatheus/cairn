@@ -13,7 +13,7 @@ import (
 	"cairn/internal/remotestore"
 )
 
-func TestLocalSearchContextUsesEnvelopeAndDegradation(t *testing.T) {
+func TestLocalSearchContextUsesLocalOnlyAutoSearch(t *testing.T) {
 	ops := newFixtureOps(t)
 	envelope, err := ops.SearchContext(context.Background(), mcpschema.SearchContextRequest{
 		Query: "auth",
@@ -26,8 +26,13 @@ func TestLocalSearchContextUsesEnvelopeAndDegradation(t *testing.T) {
 	if !envelope.OK || len(envelope.Data.Results) == 0 {
 		t.Fatalf("expected search results envelope: %#v", envelope)
 	}
-	if len(envelope.Warnings) != 2 || len(envelope.Unavailable) != 2 || len(envelope.NextSteps) == 0 {
-		t.Fatalf("expected local-only degradation details: %#v", envelope)
+	if len(envelope.Data.AttemptedModes) != 2 ||
+		envelope.Data.AttemptedModes[0] != mcpschema.SearchModeMetadata ||
+		envelope.Data.AttemptedModes[1] != mcpschema.SearchModeFullText {
+		t.Fatalf("expected metadata and full-text attempts only: %#v", envelope.Data.AttemptedModes)
+	}
+	if len(envelope.Warnings) != 0 || len(envelope.Unavailable) != 0 || len(envelope.NextSteps) != 0 {
+		t.Fatalf("local-only auto search should not report remote degradation: %#v", envelope)
 	}
 	if envelope.Provenance.Profile != mcpschema.ProfileLocal {
 		t.Fatalf("expected local provenance: %#v", envelope.Provenance)
@@ -100,8 +105,8 @@ func TestIndexStatusAndBootstrapAreLocalOnly(t *testing.T) {
 	if !status.Data.LocalAvailable || status.Data.RemoteAvailable || !status.Data.Fresh {
 		t.Fatalf("unexpected index status: %#v", status)
 	}
-	if len(status.Warnings) != 1 || len(status.Unavailable) != 1 || len(status.NextSteps) != 1 {
-		t.Fatalf("expected local-only index degradation details: %#v", status)
+	if len(status.Warnings) != 0 || len(status.Unavailable) != 0 || len(status.NextSteps) != 1 {
+		t.Fatalf("expected clean local-only index status with local next step: %#v", status)
 	}
 
 	bootstrap, err := ops.GetBootstrap(context.Background(), mcpschema.EmptyRequest{})
@@ -110,6 +115,61 @@ func TestIndexStatusAndBootstrapAreLocalOnly(t *testing.T) {
 	}
 	if !bootstrap.OK || bootstrap.Data.Summary == "" || len(bootstrap.NextSteps) == 0 {
 		t.Fatalf("unexpected bootstrap: %#v", bootstrap)
+	}
+}
+
+func TestIndexStatusSuggestsRefreshWhenLocalIndexMissing(t *testing.T) {
+	root := t.TempDir()
+	ops := &Local{Root: root}
+
+	status, err := ops.IndexStatus(context.Background(), mcpschema.IndexStatusRequest{})
+	if err != nil {
+		t.Fatalf("IndexStatus returned error: %v", err)
+	}
+	if status.Data.LocalAvailable || status.Data.Fresh {
+		t.Fatalf("local index should be missing before refresh: %#v", status)
+	}
+	if len(status.NextSteps) != 1 || status.NextSteps[0].Action != string(mcpschema.ToolIndexRefresh) {
+		t.Fatalf("missing local index should suggest refresh: %#v", status.NextSteps)
+	}
+}
+
+func TestIndexStatusReportsConfiguredRemoteIndexer(t *testing.T) {
+	ops := newFixtureOps(t)
+	lastRefresh := time.Date(2026, 5, 6, 13, 30, 0, 0, time.UTC)
+	ops.RemoteIndex = &remoteindex.FakeClient{
+		StatusResponse: remoteindex.StatusResponse{
+			Available:     true,
+			Fresh:         true,
+			LastRefreshAt: lastRefresh,
+			IndexedCount:  4,
+		},
+	}
+	status, err := ops.IndexStatus(context.Background(), mcpschema.IndexStatusRequest{})
+	if err != nil {
+		t.Fatalf("IndexStatus returned error: %v", err)
+	}
+	if !status.Data.LocalAvailable || !status.Data.RemoteAvailable || !status.Data.Fresh || status.Data.LastRefreshAt.Before(lastRefresh) {
+		t.Fatalf("unexpected remote index status: %#v", status)
+	}
+	if len(status.Warnings) != 0 || len(status.Unavailable) != 0 {
+		t.Fatalf("remote index status should not degrade when available: %#v", status)
+	}
+}
+
+func TestIndexStatusRemoteFailureSuggestsStatusRetry(t *testing.T) {
+	ops := newFixtureOps(t)
+	ops.RemoteIndex = failingRemoteIndex{}
+
+	status, err := ops.IndexStatus(context.Background(), mcpschema.IndexStatusRequest{})
+	if err != nil {
+		t.Fatalf("IndexStatus returned error: %v", err)
+	}
+	if status.OK != true || len(status.Warnings) != 1 || len(status.Unavailable) != 1 {
+		t.Fatalf("expected remote status degradation without local failure: %#v", status)
+	}
+	if len(status.NextSteps) != 1 || status.NextSteps[0].Action != string(mcpschema.ToolIndexStatus) {
+		t.Fatalf("remote status failure should suggest status retry: %#v", status.NextSteps)
 	}
 }
 
@@ -194,6 +254,61 @@ profiles:
 	}
 }
 
+func TestOpenLocalConfiguresLocalFSRemoteStore(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, ".cairn/config.yaml", `schema_version: 1
+workspace_id: cairn:workspace:test
+managed_folders:
+  - working
+document_types:
+  note: working
+remote_sync:
+  provider: local_fs
+  root: .cairn/local-remote
+  prefix: pod-a
+`)
+	local, err := OpenLocal(root)
+	if err != nil {
+		t.Fatalf("OpenLocal() error = %v", err)
+	}
+	defer local.Close()
+	store, ok := local.RemoteStore.(*remotestore.LocalFSStore)
+	if !ok {
+		t.Fatalf("expected LocalFSStore, got %T", local.RemoteStore)
+	}
+	if store.Root != filepath.Join(root, ".cairn", "local-remote") || store.Prefix != "pod-a" {
+		t.Fatalf("unexpected store config: %#v", store)
+	}
+}
+
+func TestOpenLocalConfiguresAzuriteAuthMode(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, ".cairn/config.yaml", `schema_version: 1
+workspace_id: cairn:workspace:test
+managed_folders:
+  - working
+document_types:
+  note: working
+remote_sync:
+  provider: azure_blob
+  endpoint: http://localhost:10000/devstoreaccount1
+  container: cairn
+  auth_mode: azurite
+`)
+	local, err := OpenLocal(root)
+	if err != nil {
+		t.Fatalf("OpenLocal() error = %v", err)
+	}
+	defer local.Close()
+	store, ok := local.RemoteStore.(*remotestore.AzureBlobStore)
+	if !ok {
+		t.Fatalf("expected AzureBlobStore, got %T", local.RemoteStore)
+	}
+	if store.Config.Endpoint != "http://localhost:10000/devstoreaccount1" || store.Config.AuthMode != "azurite" {
+		t.Fatalf("unexpected store config: %#v", store.Config)
+	}
+}
+
 func TestOpenLocalWithoutRemoteConfigRemainsLocalOnly(t *testing.T) {
 	local, err := OpenLocal(t.TempDir())
 	if err != nil {
@@ -222,6 +337,9 @@ func TestIndexRefreshReportsAcceptedAndRefreshedRemoteResponses(t *testing.T) {
 	if !accepted.OK || !accepted.Data.Accepted || accepted.Data.RemoteRefreshed || accepted.Data.JobID != "job-1" {
 		t.Fatalf("unexpected accepted refresh envelope: %#v", accepted)
 	}
+	if !accepted.Data.LocalRefreshed {
+		t.Fatalf("expected local index refresh before optional remote refresh: %#v", accepted)
+	}
 	if len(accepted.NextSteps) != 1 || accepted.NextSteps[0].Action != string(mcpschema.ToolIndexStatus) {
 		t.Fatalf("accepted async refresh should suggest status: %#v", accepted.NextSteps)
 	}
@@ -239,6 +357,9 @@ func TestIndexRefreshReportsAcceptedAndRefreshedRemoteResponses(t *testing.T) {
 	}
 	if !refreshed.OK || !refreshed.Data.Accepted || !refreshed.Data.RemoteRefreshed {
 		t.Fatalf("unexpected refreshed envelope: %#v", refreshed)
+	}
+	if !refreshed.Data.LocalRefreshed {
+		t.Fatalf("expected local index refresh before optional remote refresh: %#v", refreshed)
 	}
 	if len(refreshed.Data.ChangedPaths) == 0 || len(refreshed.NextSteps) != 1 || refreshed.NextSteps[0].Action != string(mcpschema.ToolSearchContext) {
 		t.Fatalf("refreshed response should include changed paths and search next step: %#v", refreshed)
@@ -291,6 +412,9 @@ func TestIndexRefreshUnavailableAndFailureDegrade(t *testing.T) {
 	}
 	if failed.OK || len(failed.Warnings) != 1 || len(failed.Unavailable) != 1 || !failed.Unavailable[0].Retryable {
 		t.Fatalf("expected retryable failure degradation: %#v", failed)
+	}
+	if !failed.Data.LocalRefreshed {
+		t.Fatalf("expected local refresh to remain available despite remote failure: %#v", failed)
 	}
 }
 

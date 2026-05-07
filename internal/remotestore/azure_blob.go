@@ -3,6 +3,9 @@ package remotestore
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -10,8 +13,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
+	"sort"
 	"strings"
+	"time"
 
 	"cairn/internal/syncstate"
 )
@@ -40,6 +46,7 @@ type AzureBlobConfig struct {
 	Endpoint  string
 	Container string
 	Prefix    string
+	AuthMode  string
 }
 
 type AzureBlobStore struct {
@@ -55,7 +62,7 @@ func NewAzureBlobStore(config AzureBlobConfig, provider TokenProvider) (*AzureBl
 	if config.Container == "" {
 		return nil, errors.New("azure blob container is required")
 	}
-	if provider == nil {
+	if provider == nil && config.AuthMode != "azurite" {
 		provider = AzureCLITokenProvider{}
 	}
 	return &AzureBlobStore{Config: config, TokenProvider: provider, Client: http.DefaultClient}, nil
@@ -102,12 +109,15 @@ func (s *AzureBlobStore) ReadObject(ctx context.Context, path string) ([]byte, b
 }
 
 func (s *AzureBlobStore) WriteObject(ctx context.Context, path string, content []byte) error {
-	req, err := s.request(ctx, http.MethodPut, path, bytes.NewReader(content))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, s.ObjectURL(path), bytes.NewReader(content))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("x-ms-blob-type", "BlockBlob")
 	req.Header.Set("Content-Length", fmt.Sprintf("%d", len(content)))
+	if err := s.authorize(req); err != nil {
+		return err
+	}
 	resp, err := s.client().Do(req)
 	if err != nil {
 		return err
@@ -133,10 +143,6 @@ func (s *AzureBlobStore) DeleteObject(ctx context.Context, path string) error {
 }
 
 func (s *AzureBlobStore) ListObjects(ctx context.Context, prefix string) ([]ObjectInfo, error) {
-	token, err := s.TokenProvider.Token(ctx)
-	if err != nil {
-		return nil, err
-	}
 	listURL, err := url.Parse(s.containerURL())
 	if err != nil {
 		return nil, err
@@ -153,7 +159,9 @@ func (s *AzureBlobStore) ListObjects(ctx context.Context, prefix string) ([]Obje
 	if err != nil {
 		return nil, err
 	}
-	authorize(req, token)
+	if err := s.authorize(req); err != nil {
+		return nil, err
+	}
 	resp, err := s.client().Do(req)
 	if err != nil {
 		return nil, err
@@ -177,15 +185,13 @@ func (s *AzureBlobStore) ListObjects(ctx context.Context, prefix string) ([]Obje
 }
 
 func (s *AzureBlobStore) request(ctx context.Context, method string, workspacePath string, body io.Reader) (*http.Request, error) {
-	token, err := s.TokenProvider.Token(ctx)
-	if err != nil {
-		return nil, err
-	}
 	req, err := http.NewRequestWithContext(ctx, method, s.ObjectURL(workspacePath), body)
 	if err != nil {
 		return nil, err
 	}
-	authorize(req, token)
+	if err := s.authorize(req); err != nil {
+		return nil, err
+	}
 	return req, nil
 }
 
@@ -205,6 +211,19 @@ func (s *AzureBlobStore) containerURL() string {
 	return endpoint + "/" + pathEscape(s.Config.Container)
 }
 
+func (s *AzureBlobStore) authorize(req *http.Request) error {
+	req.Header.Set("x-ms-version", "2023-11-03")
+	if s.Config.AuthMode == "azurite" {
+		return authorizeAzurite(req)
+	}
+	token, err := s.TokenProvider.Token(req.Context())
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	return nil
+}
+
 func (s *AzureBlobStore) client() *http.Client {
 	if s.Client != nil {
 		return s.Client
@@ -215,6 +234,96 @@ func (s *AzureBlobStore) client() *http.Client {
 func authorize(req *http.Request, token string) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("x-ms-version", "2023-11-03")
+}
+
+func authorizeAzurite(req *http.Request) error {
+	const account = "devstoreaccount1"
+	const defaultKey = "Y2Fpcm4tbG9jYWwtZGV2LWF6dXJpdGUta2V5LTAwMDE="
+	key := os.Getenv("AZURITE_ACCOUNT_KEY")
+	if key == "" {
+		key = defaultKey
+	}
+	decodedKey, err := base64.StdEncoding.DecodeString(key)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("x-ms-date", time.Now().UTC().Format(http.TimeFormat))
+	req.Header.Set("x-ms-version", "2023-11-03")
+	stringToSign := sharedKeyStringToSign(req)
+	mac := hmac.New(sha256.New, decodedKey)
+	if _, err := mac.Write([]byte(stringToSign)); err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "SharedKey "+account+":"+base64.StdEncoding.EncodeToString(mac.Sum(nil)))
+	return nil
+}
+
+func sharedKeyStringToSign(req *http.Request) string {
+	contentLength := req.Header.Get("Content-Length")
+	if contentLength == "" && req.ContentLength > 0 {
+		contentLength = fmt.Sprintf("%d", req.ContentLength)
+	}
+	if contentLength == "0" {
+		contentLength = ""
+	}
+	parts := []string{
+		req.Method,
+		req.Header.Get("Content-Encoding"),
+		req.Header.Get("Content-Language"),
+		contentLength,
+		req.Header.Get("Content-MD5"),
+		req.Header.Get("Content-Type"),
+		req.Header.Get("Date"),
+		req.Header.Get("If-Modified-Since"),
+		req.Header.Get("If-Match"),
+		req.Header.Get("If-None-Match"),
+		req.Header.Get("If-Unmodified-Since"),
+		req.Header.Get("Range"),
+		canonicalizedHeaders(req),
+		canonicalizedResource(req),
+	}
+	return strings.Join(parts, "\n")
+}
+
+func canonicalizedHeaders(req *http.Request) string {
+	var keys []string
+	for key := range req.Header {
+		lower := strings.ToLower(key)
+		if strings.HasPrefix(lower, "x-ms-") {
+			keys = append(keys, lower)
+		}
+	}
+	sort.Strings(keys)
+	var lines []string
+	for _, key := range keys {
+		values := req.Header.Values(key)
+		sort.Strings(values)
+		lines = append(lines, key+":"+strings.Join(values, ","))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func canonicalizedResource(req *http.Request) string {
+	resource := "/devstoreaccount1" + req.URL.EscapedPath()
+	if resource == "" {
+		resource = "/"
+	}
+	if req.URL.RawQuery == "" {
+		return resource
+	}
+	query := req.URL.Query()
+	keys := make([]string, 0, len(query))
+	for key := range query {
+		keys = append(keys, strings.ToLower(key))
+	}
+	sort.Strings(keys)
+	var lines []string
+	for _, key := range keys {
+		values := query[key]
+		sort.Strings(values)
+		lines = append(lines, key+":"+strings.Join(values, ","))
+	}
+	return resource + "\n" + strings.Join(lines, "\n")
 }
 
 func requireSuccess(resp *http.Response) error {

@@ -1,0 +1,15 @@
+schema_version: 1
+name: core
+required_fields:
+  - id
+  - schema_version
+  - title
+  - slug
+  - type
+  - status
+  - created
+  - updated
+  - authors
+  - actors
+  - source
+  - tags

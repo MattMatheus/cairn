@@ -64,7 +64,7 @@ func TestFullTextSearchHonorsCairnignore(t *testing.T) {
 	}
 }
 
-func TestSearchAutoUsesMetadataThenFullTextAndReportsDegradation(t *testing.T) {
+func TestSearchAutoUsesLocalMetadataThenFullTextOnlyWhenRemoteUnconfigured(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "runbooks/auth.md", managedMarkdownWithBody("cairn:auth", "Auth Timeout Runbook", "auth-timeout-runbook", "runbook", "canonical", []string{"auth"}, []string{"codex"}, []string{"matt"}, "promotion", "2026-05-02T12:00:00Z", "Retry auth token requests with bounded exponential backoff."))
 	writeFile(t, root, "notes/token.md", managedMarkdownWithBody("cairn:token", "Credential Note", "credential-note", "note", "working", []string{"auth"}, []string{"codex"}, []string{"matt"}, "capture", "2026-05-03T12:00:00Z", "This note discusses auth token rotation but not in its metadata."))
@@ -85,10 +85,9 @@ func TestSearchAutoUsesMetadataThenFullTextAndReportsDegradation(t *testing.T) {
 	if !envelope.OK {
 		t.Fatalf("expected ok search envelope: %#v", envelope)
 	}
-	if len(envelope.Data.AttemptedModes) != 3 ||
+	if len(envelope.Data.AttemptedModes) != 2 ||
 		envelope.Data.AttemptedModes[0] != mcpschema.SearchModeMetadata ||
-		envelope.Data.AttemptedModes[1] != mcpschema.SearchModeFullText ||
-		envelope.Data.AttemptedModes[2] != mcpschema.SearchModeSemantic {
+		envelope.Data.AttemptedModes[1] != mcpschema.SearchModeFullText {
 		t.Fatalf("unexpected attempted modes: %#v", envelope.Data.AttemptedModes)
 	}
 	if len(envelope.Data.Results) != 2 {
@@ -97,10 +96,10 @@ func TestSearchAutoUsesMetadataThenFullTextAndReportsDegradation(t *testing.T) {
 	if envelope.Data.Results[0].MatchType != mcpschema.SearchModeMetadata {
 		t.Fatalf("expected metadata result first, got %#v", envelope.Data.Results)
 	}
-	if len(envelope.Warnings) != 2 || len(envelope.Unavailable) != 2 || len(envelope.NextSteps) == 0 {
-		t.Fatalf("expected semantic/remote degradation reporting, got %#v", envelope)
+	if len(envelope.Warnings) != 0 || len(envelope.Unavailable) != 0 || len(envelope.NextSteps) != 0 {
+		t.Fatalf("unconfigured remote index should not degrade auto local search: %#v", envelope)
 	}
-	if len(envelope.Provenance.AttemptedModes) != 3 {
+	if len(envelope.Provenance.AttemptedModes) != 2 {
 		t.Fatalf("expected provenance attempted modes, got %#v", envelope.Provenance)
 	}
 }

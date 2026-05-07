@@ -1,0 +1,23 @@
+schema_version: 1
+workspace_id: cairn:workspace:pilot-example
+managed_folders:
+  - inbox
+  - agents
+  - working
+  - decisions
+  - runbooks
+  - projects
+  - services
+  - handoffs
+  - onboarding
+  - archive
+document_types:
+  note: inbox
+  handoff: handoffs
+  investigation: working
+  decision: decisions
+  runbook: runbooks
+  project: projects
+  service: services
+  onboarding: onboarding
+required_skills:

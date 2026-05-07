@@ -1,5 +1,7 @@
 # Cairn Quickstart
 
+This quickstart covers Cairn Core v1: local markdown files, validation, local SQLite search, MCP access, and optional blob-backed sync. It does not require Docker, Postgres, pgvector, CocoIndex, or a remote indexer.
+
 ## Install
 
 From the repository root:
@@ -79,9 +81,17 @@ cairn index status
 cairn index refresh
 ```
 
-Search uses local metadata and full-text lookup. If a remote indexer is configured, semantic/remote search can participate; otherwise Cairn reports degraded remote modes and remains useful locally.
+Search uses local metadata and full-text lookup. `index refresh` rebuilds the local SQLite index. Semantic or remote search is deferred rich-retrieval work; if such a mode is requested without an optional adapter configured, Cairn should report a clear degraded/unavailable mode and keep local search usable.
 
 ## Sync
+
+Remote sharing uses a blob-style store plus a remote manifest. For the no-service local path, configure `local_fs` in `.cairn/config.yaml`:
+
+```yaml
+remote_sync:
+  provider: local_fs
+  root: /tmp/cairn-local-remote
+```
 
 Use dry-run before mutating remote or local state:
 
@@ -92,7 +102,15 @@ cairn sync push
 cairn sync pull
 ```
 
-Sync refuses divergent local/remote changes instead of merging. Resolve conflicts manually, then rerun status and dry-run.
+Sync refuses divergent local/remote changes instead of merging. A refused sync should not overwrite local files, overwrite remote objects, update local sync state, or publish a new remote manifest. Resolve conflicts manually, then rerun status and dry-run.
+
+Azure Blob can also be used through `remote_sync.provider: azure_blob`, but it is an advanced integration path for v1, not required for the default quickstart.
+
+For a repeatable no-service sync check from a repo checkout, run:
+
+```sh
+deployments/local-dev/core-smoke.sh
+```
 
 ## MCP Modes
 

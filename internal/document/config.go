@@ -24,6 +24,8 @@ type RemoteSyncConfig struct {
 	Endpoint  string
 	Container string
 	Prefix    string
+	Root      string
+	AuthMode  string
 }
 
 type RemoteIndexConfig struct {
@@ -165,6 +167,10 @@ func parseConfig(content string, cfg Config) Config {
 					podRemoteSync.Container = value
 				case "prefix":
 					podRemoteSync.Prefix = cleanConfigPath(value)
+				case "root":
+					podRemoteSync.Root = value
+				case "auth_mode":
+					podRemoteSync.AuthMode = value
 				case "url":
 					podRemoteIndex.URL = value
 				case "audience":
@@ -213,6 +219,10 @@ func parseConfig(content string, cfg Config) Config {
 				cfg.RemoteSync.Container = value
 			case "prefix":
 				cfg.RemoteSync.Prefix = cleanConfigPath(value)
+			case "root":
+				cfg.RemoteSync.Root = value
+			case "auth_mode":
+				cfg.RemoteSync.AuthMode = value
 			}
 		case "remote_index":
 			key, value, ok := strings.Cut(line, ":")
@@ -253,6 +263,12 @@ func mergeRemoteSync(target *RemoteSyncConfig, profile RemoteSyncConfig) {
 	}
 	if profile.Prefix != "" {
 		target.Prefix = profile.Prefix
+	}
+	if profile.Root != "" {
+		target.Root = profile.Root
+	}
+	if profile.AuthMode != "" {
+		target.AuthMode = profile.AuthMode
 	}
 }
 
@@ -366,11 +382,11 @@ func validateConfigFile(root string) []ConfigFinding {
 				if profile == "pod-remote" && value == "true" {
 					podRemoteEnabled = true
 				}
-			case "provider", "account", "endpoint", "container", "prefix", "url", "audience", "tenant_id":
+			case "provider", "account", "endpoint", "container", "prefix", "root", "auth_mode", "url", "audience", "tenant_id":
 				if profile == "pod-remote" {
 					podRemoteFields[key] = value
 				}
-				if key == "provider" && value != "" && value != "azure_blob" {
+				if key == "provider" && value != "" && value != "azure_blob" && value != "local_fs" {
 					findings = append(findings, configFinding("warning", lineNo, "unknown remote_sync provider "+value))
 				}
 			default:
@@ -416,10 +432,10 @@ func validateConfigFile(root string) []ConfigFinding {
 			value = unquoteConfig(strings.TrimSpace(value))
 			switch key {
 			case "provider":
-				if value != "" && value != "azure_blob" {
+				if value != "" && value != "azure_blob" && value != "local_fs" {
 					findings = append(findings, configFinding("warning", lineNo, "unknown remote_sync provider "+value))
 				}
-			case "account", "endpoint", "container", "prefix":
+			case "account", "endpoint", "container", "prefix", "root", "auth_mode":
 			default:
 				findings = append(findings, configFinding("warning", lineNo, "unknown remote_sync key "+key))
 			}
@@ -443,10 +459,14 @@ func validateConfigFile(root string) []ConfigFinding {
 		if podRemoteFields["provider"] == "" {
 			findings = append(findings, configFinding("error", 0, "pod-remote provider is required when enabled"))
 		}
-		if podRemoteFields["account"] == "" && podRemoteFields["endpoint"] == "" {
+		if podRemoteFields["provider"] == "local_fs" {
+			if podRemoteFields["root"] == "" {
+				findings = append(findings, configFinding("error", 0, "pod-remote root is required when local_fs is enabled"))
+			}
+		} else if podRemoteFields["account"] == "" && podRemoteFields["endpoint"] == "" {
 			findings = append(findings, configFinding("error", 0, "pod-remote account or endpoint is required when enabled"))
 		}
-		if podRemoteFields["container"] == "" {
+		if podRemoteFields["provider"] != "local_fs" && podRemoteFields["container"] == "" {
 			findings = append(findings, configFinding("error", 0, "pod-remote container is required when enabled"))
 		}
 	}

@@ -13,7 +13,7 @@ import (
 	"cairn/internal/syncstate"
 )
 
-func TestValidateReportsDocumentAndMetadataHealthFindings(t *testing.T) {
+func TestValidateReportsDocumentFindings(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "working/missing.md", "# Missing frontmatter\n")
 	writeFile(t, root, "working/invalid.md", `---
@@ -42,8 +42,19 @@ tags: [test]
 	}
 	assertFinding(t, data.Findings, "working/missing.md", "", mcpschema.WarningValidation, "warning")
 	assertFinding(t, data.Findings, "working/invalid.md", "", mcpschema.WarningValidation, "warning")
-	assertFinding(t, data.Findings, ".cairn/index/cairn.db", "", mcpschema.WarningIndexDegraded, "warning")
-	assertFinding(t, data.Findings, ".cairn/sync-state.json", "", mcpschema.WarningSyncDivergence, "warning")
+}
+
+func TestValidateDoesNotWarnBeforeFirstIndexOrSync(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "working/good.md", validDoc("cairn:GoodDoc", "Good Doc", "good-doc"))
+
+	data, err := Validate(context.Background(), root, ValidateOptions{})
+	if err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+	if !data.Healthy || len(data.Findings) != 0 {
+		t.Fatalf("fresh local workspace should validate without index/sync warnings: %#v", data.Findings)
+	}
 }
 
 func TestValidateUsesDurableBoundarySeverity(t *testing.T) {

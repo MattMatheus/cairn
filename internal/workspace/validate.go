@@ -107,12 +107,7 @@ func validateDocument(root string, rel string, mode document.ValidationMode) ([]
 func metadataHealthFindings(root string) []mcpschema.ValidationFinding {
 	var findings []mcpschema.ValidationFinding
 	if _, err := os.Stat(localindex.DBPath(root)); errors.Is(err, os.ErrNotExist) {
-		findings = append(findings, mcpschema.ValidationFinding{
-			Severity: "warning",
-			Code:     mcpschema.WarningIndexDegraded,
-			Message:  "local metadata index is missing",
-			Path:     ".cairn/index/cairn.db",
-		})
+		// A missing local index is normal before the first `cairn index refresh`.
 	} else if err != nil {
 		findings = append(findings, mcpschema.ValidationFinding{
 			Severity: "warning",
@@ -124,12 +119,7 @@ func metadataHealthFindings(root string) []mcpschema.ValidationFinding {
 
 	statePath := filepath.Join(root, ".cairn", "sync-state.json")
 	if _, err := os.Stat(statePath); errors.Is(err, os.ErrNotExist) {
-		findings = append(findings, mcpschema.ValidationFinding{
-			Severity: "warning",
-			Code:     mcpschema.WarningSyncDivergence,
-			Message:  "local sync state is missing",
-			Path:     ".cairn/sync-state.json",
-		})
+		// A missing sync state is normal before the first successful sync.
 	} else if err != nil {
 		findings = append(findings, mcpschema.ValidationFinding{
 			Severity: "warning",

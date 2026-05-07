@@ -10,7 +10,9 @@ import (
 )
 
 func TestValidateWorkspaceReturnsEnvelope(t *testing.T) {
-	local := &Local{Root: t.TempDir()}
+	root := t.TempDir()
+	writeValidateFile(t, root, "working/missing.md", "# Missing frontmatter\n")
+	local := &Local{Root: root}
 	envelope, err := local.ValidateWorkspace(context.Background(), mcpschema.ValidateWorkspaceRequest{})
 	if err != nil {
 		t.Fatalf("ValidateWorkspace() error = %v", err)
@@ -18,7 +20,7 @@ func TestValidateWorkspaceReturnsEnvelope(t *testing.T) {
 	if !envelope.OK {
 		t.Fatalf("expected warning-only workspace validation to return OK")
 	}
-	if envelope.Data.Findings == nil {
+	if len(envelope.Data.Findings) == 0 {
 		t.Fatalf("expected findings collection")
 	}
 	if len(envelope.NextSteps) == 0 {

@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"cairn/internal/document"
-	"cairn/internal/localindex"
 	"cairn/internal/mcpops"
 	"cairn/internal/mcpschema"
 	"cairn/internal/mcpserver"
@@ -254,15 +253,15 @@ func runSearch(ctx context.Context, args []string, opts options, stdout io.Write
 	if *query == "" {
 		*query = strings.Join(fs.Args(), " ")
 	}
-	index, err := localindex.Open(opts.root)
+	local, err := mcpops.OpenLocal(opts.root)
 	if err != nil {
 		return err
 	}
-	defer index.Close()
-	if _, err := index.IndexWorkspace(ctx, opts.root); err != nil {
+	defer local.Close()
+	if _, err := local.Index.IndexWorkspace(ctx, opts.root); err != nil {
 		return err
 	}
-	envelope, err := index.Search(ctx, opts.root, localindex.SearchOptions{
+	envelope, err := local.SearchContext(ctx, mcpschema.SearchContextRequest{
 		Query: *query,
 		Mode:  mcpschema.SearchMode(*mode),
 		Limit: *limit,

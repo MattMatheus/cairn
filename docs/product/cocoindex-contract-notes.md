@@ -1,5 +1,7 @@
 # CocoIndex Contract Notes
 
+Status: deferred rich-retrieval reference. CocoIndex is not required for Cairn Core v1. The v1 retrieval path is local SQLite metadata and local full-text search; these notes preserve the future service boundary for semantic search, summaries, entities, and graph features.
+
 ## Reference Review
 
 - CocoIndex examples define Python-native flows over sources such as local files, split/chunk content, embed chunks, and write target stores.
@@ -23,7 +25,7 @@ Responses map into Cairn schema types:
 
 ## Follow-Ups
 
-- Local Docker/Podman packaging prototype lives in `deployments/local-indexer/`.
-- Azure Container Apps deployment/auth plan lives in `deployments/azure-container-apps-indexer/`.
-- Define workspace-to-indexer refresh orchestration after sync pull/push.
-- Add semantic search integration into `search_context` once the service endpoint exists.
+- Local Docker/Podman packaging prototypes were removed from the active tree during the Cairn Core v1 re-scope.
+- The active local development direction lives in `deployments/local-dev/README.md`; the historical emulation ADR remains in `docs/adr/ADR-local-development-emulation.md`.
+- Defer workspace-to-indexer refresh orchestration until rich retrieval is promoted back into active scope.
+- Keep semantic search integration optional until the service endpoint is promoted back into active scope.
