@@ -1,6 +1,8 @@
 # User Docs
 
 - [Quickstart](quickstart.md)
+- [Install](install.md)
+- [Azure Blob Sync](azure-sync.md)
 - [Daily Workflows](workflows.md)
 - [Pilot Guide](pilot.md)
 - [Pilot Feedback Template](pilot-feedback.md)

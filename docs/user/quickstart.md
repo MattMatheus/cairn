@@ -4,22 +4,37 @@ This quickstart covers Cairn Core v1: local markdown files, validation, local SQ
 
 ## Install
 
-From the repository root:
+Install a released binary into userland:
 
 ```sh
-go build -o ./bin/cairn ./cmd/cairn
+curl -fsSL https://raw.githubusercontent.com/MattMatheus/cairn/main/scripts/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+cairn version
 ```
 
-Use `./bin/cairn` in the commands below, or put `bin/` on your `PATH`.
+For source contributors, `go run ./cmd/cairn version` works from the repository root. Pilots should use the released binary path above.
 
 ## Create A Workspace
 
 ```sh
+WORK_ROOT="$HOME/CairnPilot"
+mkdir -p "$WORK_ROOT"
+cd "$WORK_ROOT"
 cairn init
+cairn doctor
 cairn validate
 ```
 
 `init` creates the standard folders, `.cairn/config.yaml`, `.cairnignore`, starter schemas, onboarding docs, and terse `AGENTS.md` / `CLAUDE.md` pointers. Existing files are preserved.
+If you accidentally run `cairn init` in the Cairn source repository, Cairn refuses unless `--force` is provided.
+
+For a local no-service sync pilot, use the setup helper instead of editing config by hand:
+
+```sh
+cairn setup local-sync --remote-root /tmp/cairn-local-remote
+```
+
+This runs workspace initialization if needed and writes `remote_sync.provider: local_fs` to `.cairn/config.yaml`.
 
 ## Capture A Note
 
@@ -85,13 +100,7 @@ Search uses local metadata and full-text lookup. `index refresh` rebuilds the lo
 
 ## Sync
 
-Remote sharing uses a blob-style store plus a remote manifest. For the no-service local path, configure `local_fs` in `.cairn/config.yaml`:
-
-```yaml
-remote_sync:
-  provider: local_fs
-  root: /tmp/cairn-local-remote
-```
+Remote sharing uses a blob-style store plus a remote manifest. For the no-service local path, run `cairn setup local-sync --remote-root /tmp/cairn-local-remote`.
 
 Use dry-run before mutating remote or local state:
 
@@ -104,7 +113,7 @@ cairn sync pull
 
 Sync refuses divergent local/remote changes instead of merging. A refused sync should not overwrite local files, overwrite remote objects, update local sync state, or publish a new remote manifest. Resolve conflicts manually, then rerun status and dry-run.
 
-Azure Blob can also be used through `remote_sync.provider: azure_blob`, but it is an advanced integration path for v1, not required for the default quickstart.
+Azure Blob is the shared pod backend path. See [Azure Blob Sync](azure-sync.md) for the one-container-per-pod setup.
 
 For a repeatable no-service sync check from a repo checkout, run:
 

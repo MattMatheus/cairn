@@ -114,6 +114,21 @@ func TestInitRefusesConflictingPath(t *testing.T) {
 	}
 }
 
+func TestInitRefusesCairnSourceRootUnlessForced(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "go.mod", "module cairn\n")
+	writeFile(t, root, "cmd/cairn/main.go", "package main\n")
+	writeFile(t, root, "internal/cli/cli.go", "package cli\n")
+	writeFile(t, root, "internal/workspace/init.go", "package workspace\n")
+
+	if _, err := Init(root, InitOptions{}); err == nil || !strings.Contains(err.Error(), "refusing to initialize inside the Cairn source repository") {
+		t.Fatalf("expected source root refusal, got %v", err)
+	}
+	if _, err := Init(root, InitOptions{Force: true}); err != nil {
+		t.Fatalf("forced Init() error = %v", err)
+	}
+}
+
 func assertDir(t *testing.T, root string, rel string) {
 	t.Helper()
 	info, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel)))

@@ -5,10 +5,21 @@ Cairn is a local-first markdown context layer for small engineering pods. It giv
 ## Start Here
 
 - [Quickstart](docs/user/quickstart.md)
+- [Install](docs/user/install.md)
 - [Daily Workflows](docs/user/workflows.md)
 - [Pilot Guide](docs/user/pilot.md)
 - [Local Development Harness](deployments/local-dev/README.md)
 - [Architecture Decisions](docs/adr/README.md)
+
+## Install
+
+Pilots should install a released binary into userland:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/MattMatheus/cairn/main/scripts/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+cairn version
+```
 
 ## Build
 

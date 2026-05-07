@@ -254,7 +254,7 @@ Hard deletion/purge is CLI-only and should require explicit confirmation. Agents
 
 Cairn v1 uses on-demand sync initiated by a human or agent through CLI or MCP.
 
-Azure Blob storage is the first shared backend. Each pod is expected to have its own Azure Storage Account for isolation, billing clarity, and simpler operations.
+Azure Blob storage is the first shared backend. For v1, each pod is expected to have its own container. Multiple storage accounts may be useful later for isolation, billing clarity, or operations, but the initial pod boundary is the container.
 
 Cloud drive sync, including OneDrive, is out of scope.
 

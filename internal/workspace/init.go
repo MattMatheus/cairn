@@ -3,6 +3,7 @@ package workspace
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 
 type InitOptions struct {
 	WorkspaceID string
+	Force       bool
 }
 
 type InitResult struct {
@@ -38,9 +40,16 @@ var standardFolders = []string{
 }
 
 func Init(root string, opts InitOptions) (InitResult, error) {
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return InitResult{}, err
+	}
+	if !opts.Force && isCairnSourceRoot(absRoot) {
+		return InitResult{}, errors.New("refusing to initialize inside the Cairn source repository; choose a workspace with --root ~/CairnPilot or pass --force if this is intentional")
+	}
+
 	workspaceID := strings.TrimSpace(opts.WorkspaceID)
 	if workspaceID == "" {
-		var err error
 		workspaceID, err = newWorkspaceID()
 		if err != nil {
 			return InitResult{}, err
@@ -164,8 +173,25 @@ profiles:
     account: ""
     container: ""
     prefix: ""
-required_skills: []
+required_skills:
 `, workspaceID)
+}
+
+func isCairnSourceRoot(root string) bool {
+	content, err := os.ReadFile(filepath.Join(root, "go.mod"))
+	if err != nil || !strings.Contains(string(content), "module cairn") {
+		return false
+	}
+	for _, rel := range []string{
+		"cmd/cairn/main.go",
+		"internal/cli/cli.go",
+		"internal/workspace/init.go",
+	} {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 func cairnIgnore() string {

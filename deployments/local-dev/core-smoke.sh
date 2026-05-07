@@ -48,7 +48,7 @@ document_types:
 remote_sync:
   provider: local_fs
   root: $remote_root
-required_skills: []
+required_skills:
 YAML
 }
 
