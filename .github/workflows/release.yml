@@ -64,6 +64,8 @@ jobs:
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           fail_on_unmatched_files: true
+          overwrite_files: true
+          make_latest: true
           files: |
             dist/*.tar.gz
             dist/*.zip
