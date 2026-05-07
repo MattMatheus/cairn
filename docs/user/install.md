@@ -2,7 +2,7 @@
 
 Pilots should use a released binary and a normal workspace directory. They should not need the Go toolchain or a repository-local `bin/` shim.
 
-## Released Binary
+## macOS And Linux
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/MattMatheus/cairn/main/scripts/install.sh | sh
@@ -10,7 +10,7 @@ export PATH="$HOME/.local/bin:$PATH"
 cairn version
 ```
 
-The installer downloads the current GitHub Release asset for your OS and architecture, then installs `cairn` to `~/.local/bin` by default.
+The installer downloads the current GitHub Release asset for your OS and architecture, then installs `cairn` to `~/.local/bin` by default. Release assets include ARM macOS.
 
 Useful overrides:
 
@@ -18,6 +18,26 @@ Useful overrides:
 CAIRN_VERSION=v0.1.0 sh scripts/install.sh
 CAIRN_INSTALL_DIR=/usr/local/bin sh scripts/install.sh
 CAIRN_REPO=MattMatheus/cairn sh scripts/install.sh
+```
+
+## Windows
+
+From PowerShell:
+
+```powershell
+iwr https://raw.githubusercontent.com/MattMatheus/cairn/main/scripts/install.ps1 -UseB | iex
+$env:PATH="$HOME\.cairn\bin;$env:PATH"
+cairn version
+```
+
+The Windows installer downloads `cairn_windows_amd64.zip` or `cairn_windows_arm64.zip` and installs `cairn.exe` to `$HOME\.cairn\bin` by default.
+
+Useful overrides:
+
+```powershell
+$env:CAIRN_VERSION="v0.1.0"
+$env:CAIRN_INSTALL_DIR="$HOME\bin"
+iwr https://raw.githubusercontent.com/MattMatheus/cairn/main/scripts/install.ps1 -UseB | iex
 ```
 
 ## Source Contributor Fallback

@@ -40,9 +40,19 @@ This runs the Go test suite, builds a throwaway binary, validates and searches t
 
 Install Cairn into userland. Pilots should not need the Go toolchain or a repository-local `bin/` shim:
 
+macOS and Linux:
+
 ```sh
 curl -fsSL https://raw.githubusercontent.com/MattMatheus/cairn/main/scripts/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
+cairn version
+```
+
+Windows PowerShell:
+
+```powershell
+iwr https://raw.githubusercontent.com/MattMatheus/cairn/main/scripts/install.ps1 -UseB | iex
+$env:PATH="$HOME\.cairn\bin;$env:PATH"
 cairn version
 ```
 
