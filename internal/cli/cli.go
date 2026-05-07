@@ -34,6 +34,8 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, 
 
 	var runErr error
 	switch rest[0] {
+	case "setup":
+		runErr = runSetup(rest[1:], opts, stdout)
 	case "init":
 		runErr = runInit(rest[1:], opts, stdout)
 	case "capture":
@@ -94,6 +96,35 @@ func parseGlobal(args []string) (options, []string, error) {
 		opts.root = "."
 	}
 	return opts, args, nil
+}
+
+func runSetup(args []string, opts options, stdout io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: cairn setup local-sync --remote-root DIR")
+	}
+	switch args[0] {
+	case "local-sync":
+		fs := newFlagSet("setup local-sync")
+		workspaceID := fs.String("workspace-id", "", "workspace id")
+		remoteRoot := fs.String("remote-root", "", "local filesystem remote store root")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		result, err := workspace.SetupLocalSync(opts.root, workspace.SetupLocalSyncOptions{
+			WorkspaceID: *workspaceID,
+			RemoteRoot:  *remoteRoot,
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "Initialized workspace %s\n", result.WorkspaceID)
+		fmt.Fprintf(stdout, "Configured local sync in %s\n", result.ConfigPath)
+		fmt.Fprintf(stdout, "Local remote root: %s\n", result.RemoteRoot)
+		fmt.Fprintln(stdout, "Next: run `cairn validate`, then `cairn sync status`.")
+		return nil
+	default:
+		return fmt.Errorf("usage: cairn setup local-sync --remote-root DIR")
+	}
 }
 
 func runInit(args []string, opts options, stdout io.Writer) error {
@@ -404,7 +435,7 @@ func newFlagSet(name string) *flag.FlagSet {
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: cairn [--root DIR] <command> [options]")
-	fmt.Fprintln(w, "commands: init, capture, promote, archive, purge, validate, search, index status, sync status, mcp readonly|local-writes|remote-writes")
+	fmt.Fprintln(w, "commands: setup local-sync, init, capture, promote, archive, purge, validate, search, index status, sync status, mcp readonly|local-writes|remote-writes")
 }
 
 func runMCP(ctx context.Context, args []string, opts options, stdin io.Reader, stdout io.Writer) error {

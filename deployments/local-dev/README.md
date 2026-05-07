@@ -32,10 +32,8 @@ go run ./cmd/cairn --root "$WORK_ROOT" init --workspace-id cairn:workspace:core-
 
 Add a local filesystem remote store to `$WORK_ROOT/.cairn/config.yaml`:
 
-```yaml
-remote_sync:
-  provider: local_fs
-  root: /tmp/cairn-local-remote
+```sh
+go run ./cmd/cairn --root "$WORK_ROOT" setup local-sync --remote-root /tmp/cairn-local-remote
 ```
 
 Exercise the local-first loop:

@@ -21,6 +21,14 @@ cairn validate
 
 `init` creates the standard folders, `.cairn/config.yaml`, `.cairnignore`, starter schemas, onboarding docs, and terse `AGENTS.md` / `CLAUDE.md` pointers. Existing files are preserved.
 
+For a local no-service sync pilot, use the setup helper instead of editing config by hand:
+
+```sh
+cairn setup local-sync --remote-root /tmp/cairn-local-remote
+```
+
+This runs workspace initialization if needed and writes `remote_sync.provider: local_fs` to `.cairn/config.yaml`.
+
 ## Capture A Note
 
 ```sh
@@ -85,13 +93,7 @@ Search uses local metadata and full-text lookup. `index refresh` rebuilds the lo
 
 ## Sync
 
-Remote sharing uses a blob-style store plus a remote manifest. For the no-service local path, configure `local_fs` in `.cairn/config.yaml`:
-
-```yaml
-remote_sync:
-  provider: local_fs
-  root: /tmp/cairn-local-remote
-```
+Remote sharing uses a blob-style store plus a remote manifest. For the no-service local path, run `cairn setup local-sync --remote-root /tmp/cairn-local-remote`.
 
 Use dry-run before mutating remote or local state:
 

@@ -17,6 +17,7 @@
   - Add pilot guide and feedback template.
   - Add a small example workspace fixture.
   - Add a one-command pilot readiness check.
+  - Add a setup helper so pilots do not hand-edit sync config.
   - Keep generated local build/workspace state out of the repo.
   - Remove the local prototype indexer command/service from the active tree so pilots do not infer that a remote indexer is part of v1.
   - Make fresh workspace validation avoid warning about normal first-run missing index/sync state.
@@ -33,13 +34,13 @@
 5. The active command/test surface no longer includes `cmd/cairn-indexer`.
 
 ## Engineering Handoff
-- `Implementation summary`: Added `docs/user/pilot.md`, `docs/user/pilot-feedback.md`, `examples/pilot-workspace/`, `Makefile`, and `deployments/local-dev/pilot-check.sh`. Updated README/user/local-dev docs to point pilots at the new path. Adjusted workspace validation so missing local index and missing sync state are normal before first `index refresh` or first sync. Removed `cmd/cairn-indexer` and the local prototype remote-index service.
+- `Implementation summary`: Added `docs/user/pilot.md`, `docs/user/pilot-feedback.md`, `examples/pilot-workspace/`, `Makefile`, and `deployments/local-dev/pilot-check.sh`. Added `cairn setup local-sync --remote-root DIR` so pilots can initialize a workspace and configure `.cairn/config.yaml` without editing YAML. Updated README/user/local-dev docs to point pilots at the new path. Adjusted workspace validation so missing local index and missing sync state are normal before first `index refresh` or first sync. Removed `cmd/cairn-indexer` and the local prototype remote-index service.
 - `Action and approval notes`: Local writes and local deletions only. The human explicitly requested doing all pilot-readiness items.
 - `Validation`: `make pilot-check` passed.
 
 ## QA Review
 - `Verdict`: Pass.
-- `Evidence summary`: `make pilot-check` ran the Go test suite, built a throwaway binary, checked help output, validated/searched the example workspace, and ran the no-service sync/conflict smoke.
+- `Evidence summary`: `make pilot-check` ran the Go test suite, built a throwaway binary, checked help output, verified `cairn init` creates `.cairn/config.yaml`, verified `cairn setup local-sync` writes local sync config, validated/searched the example workspace, and ran the no-service sync/conflict smoke.
 - `Residual risks`: The first real pilot may still reveal wording or workflow friction; use `docs/user/pilot-feedback.md` immediately after the session.
 
 ## Next Step

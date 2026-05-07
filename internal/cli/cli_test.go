@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -52,6 +53,23 @@ func TestRunInitValidateAndSearch(t *testing.T) {
 	}
 	if strings.Contains(stdout, "remote indexer is unavailable") || strings.Contains(stdout, "semantic search is unavailable") {
 		t.Fatalf("auto local search should not warn about unconfigured remote indexer:\n%s", stdout)
+	}
+}
+
+func TestRunSetupLocalSyncCreatesConfig(t *testing.T) {
+	root := t.TempDir()
+	remoteRoot := filepath.Join(t.TempDir(), "remote")
+
+	stdout, stderr, code := run(t, "--root", root, "setup", "local-sync", "--workspace-id", "cairn:workspace:test", "--remote-root", remoteRoot)
+	if code != 0 {
+		t.Fatalf("setup failed code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "Configured local sync in .cairn/config.yaml") {
+		t.Fatalf("unexpected setup stdout:\n%s", stdout)
+	}
+	config := readFile(t, root, ".cairn/config.yaml")
+	if !strings.Contains(config, "remote_sync:") || !strings.Contains(config, "provider: local_fs") || !strings.Contains(config, "root: "+strconv.Quote(remoteRoot)) {
+		t.Fatalf("config missing local sync block:\n%s", config)
 	}
 }
 
@@ -247,4 +265,13 @@ func run(t *testing.T, args ...string) (string, string, int) {
 	var stderr bytes.Buffer
 	code := Run(context.Background(), args, strings.NewReader(""), &stdout, &stderr)
 	return stdout.String(), stderr.String(), code
+}
+
+func readFile(t *testing.T, root string, rel string) string {
+	t.Helper()
+	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+	if err != nil {
+		t.Fatalf("ReadFile(%s) error = %v", rel, err)
+	}
+	return string(content)
 }

@@ -7,6 +7,9 @@ This guide is the first-run path for a friendly engineering pilot. The goal is t
 A pilot engineer should be able to:
 
 - build or run Cairn from the repo
+- initialize a fresh workspace with `cairn init`
+- confirm `.cairn/config.yaml` exists
+- configure no-service sync with `cairn setup local-sync`
 - inspect visible markdown documents
 - capture a new document
 - validate the workspace
@@ -46,14 +49,54 @@ cairn help
 
 Expected: the help output starts with `usage: cairn`.
 
+## Initialize A Fresh Workspace
+
+Create and initialize a throwaway workspace:
+
+```sh
+WORK_ROOT="$(mktemp -d)/cairn-pilot"
+cairn --root "$WORK_ROOT" init --workspace-id cairn:workspace:pilot
+test -f "$WORK_ROOT/.cairn/config.yaml"
+```
+
+Expected:
+
+```text
+Initialized workspace cairn:workspace:pilot
+```
+
+The `test -f` command should print nothing and exit successfully. If `.cairn/config.yaml` is missing, stop there; sync will not be configured correctly.
+
+## Configure No-Service Sync
+
+Run the setup helper so you do not have to edit YAML by hand:
+
+```sh
+cairn --root "$WORK_ROOT" setup local-sync --remote-root /tmp/cairn-pilot-remote
+```
+
+Expected:
+
+```text
+Configured local sync in .cairn/config.yaml
+```
+
+This command is safe to run on a new workspace. It creates the standard Cairn files if they do not exist and writes the equivalent of:
+
+```yaml
+remote_sync:
+  provider: local_fs
+  root: /tmp/cairn-pilot-remote
+```
+
 ## Inspect The Example Workspace
 
 Copy the sample workspace to a throwaway location:
 
 ```sh
-WORK_ROOT="$(mktemp -d)/cairn-pilot"
-cp -R examples/pilot-workspace "$WORK_ROOT"
-cd "$WORK_ROOT"
+SAMPLE_ROOT="$(mktemp -d)/cairn-pilot-example"
+cp -R "$CAIRN_REPO/examples/pilot-workspace" "$SAMPLE_ROOT"
+cd "$SAMPLE_ROOT"
 ```
 
 Open these files in an editor:
@@ -107,12 +150,10 @@ cairn search "first impression"
 
 ## Try No-Service Sync
 
-Add a local filesystem remote store to `.cairn/config.yaml`:
+The sample workspace already has a config file. Configure a local filesystem remote store with the same setup helper:
 
-```yaml
-remote_sync:
-  provider: local_fs
-  root: /tmp/cairn-pilot-remote
+```sh
+cairn setup local-sync --remote-root /tmp/cairn-pilot-example-remote
 ```
 
 Then run:
