@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -32,7 +33,7 @@ func TestRunInitValidateAndSearch(t *testing.T) {
 	if !strings.Contains(stdout, "Captured agents/codex/searchable-note.md") {
 		t.Fatalf("unexpected capture stdout:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "Next: promote the document") {
+	if !strings.Contains(stdout, "Next: validate the workspace") || !strings.Contains(stdout, "Next: promote the document") || !strings.Contains(stdout, "Next: sync the workspace") {
 		t.Fatalf("capture should include next steps:\n%s", stdout)
 	}
 
@@ -91,6 +92,140 @@ func TestRunSetupAzureSyncCreatesConfig(t *testing.T) {
 	}
 }
 
+func TestRunRepoAttachListAndDiscover(t *testing.T) {
+	podRoot := t.TempDir()
+	repoRoot := filepath.Join(filepath.Dir(podRoot), "payments-api")
+	if err := os.MkdirAll(repoRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	runOK(t, "--root", podRoot, "init", "--workspace-id", "cairn:workspace:test")
+
+	stdout, stderr, code := run(t, "--root", podRoot, "repo", "attach", "--name", "payments-api", "--path", "../payments-api", "--url", "https://dev.azure.com/org/project/_git/payments-api")
+	if code != 0 {
+		t.Fatalf("repo attach code=%d stderr=%s", code, stderr)
+	}
+	for _, expected := range []string{
+		"Attached repo payments-api -> ../payments-api",
+		"Wrote workspace pointer",
+		"Cairn will not clone, index, sync, or validate repo contents",
+	} {
+		if !strings.Contains(stdout, expected) {
+			t.Fatalf("repo attach missing %q:\n%s", expected, stdout)
+		}
+	}
+
+	stdout, stderr, code = run(t, "--root", podRoot, "repo", "list")
+	if code != 0 {
+		t.Fatalf("repo list code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "payments-api -> ../payments-api") || !strings.Contains(stdout, "reference metadata only") {
+		t.Fatalf("unexpected repo list stdout:\n%s", stdout)
+	}
+
+	stdout, stderr, code = run(t, "repo", "discover", "--from", repoRoot)
+	if code != 0 {
+		t.Fatalf("repo discover code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Cairn workspace: "+filepath.ToSlash(podRoot)) || !strings.Contains(stdout, "explicit .cairn-workspace pointer") {
+		t.Fatalf("unexpected repo discover stdout:\n%s", stdout)
+	}
+}
+
+func TestRunADOCaptureCreatesWorkingCandidate(t *testing.T) {
+	root := t.TempDir()
+	payloadPath := writeADOPayload(t, root)
+
+	stdout, stderr, code := run(t, "--root", root, "ado", "capture", "--event", "pr-completed", "--payload-file", payloadPath)
+	if code != 0 {
+		t.Fatalf("ado capture code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Captured candidate agents/ado/ado-pr-completed-add-checkout-retry.md") {
+		t.Fatalf("unexpected stdout:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Next: review the ADO candidate") {
+		t.Fatalf("stdout missing review next step:\n%s", stdout)
+	}
+	content := readFile(t, root, "agents/ado/ado-pr-completed-add-checkout-retry.md")
+	for _, expected := range []string{
+		"type: handoff",
+		"status: working",
+		"tags:\n  - ado\n  - candidate\n  - payments-api",
+		"Pull request: 42",
+		"Repository: payments-api",
+		"Review this candidate and promote it only if it should become durable pod knowledge.",
+	} {
+		if !strings.Contains(content, expected) {
+			t.Fatalf("ADO capture missing %q:\n%s", expected, content)
+		}
+	}
+}
+
+func TestRunADOCaptureCanPromoteOnlyToProposed(t *testing.T) {
+	root := t.TempDir()
+	payloadPath := writeADOPayload(t, root)
+
+	stdout, stderr, code := run(t, "--root", root, "ado", "capture", "--event", "pr-completed", "--payload-file", payloadPath, "--status", "proposed")
+	if code != 0 {
+		t.Fatalf("ado capture proposed code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Captured candidate and promoted handoffs/ado-pr-completed-add-checkout-retry.md") {
+		t.Fatalf("unexpected stdout:\n%s", stdout)
+	}
+	content := readFile(t, root, "handoffs/ado-pr-completed-add-checkout-retry.md")
+	if !strings.Contains(content, "status: proposed") {
+		t.Fatalf("expected proposed candidate:\n%s", content)
+	}
+
+	_, stderr, code = run(t, "--root", root, "ado", "capture", "--event", "pr-completed", "--payload-file", payloadPath, "--status", "canonical")
+	if code == 0 {
+		t.Fatalf("expected canonical ADO capture to fail")
+	}
+	if !strings.Contains(stderr, "supports only working or proposed") {
+		t.Fatalf("unexpected stderr:\n%s", stderr)
+	}
+}
+
+func TestRunHealthReportPrintsAndWritesMarkdown(t *testing.T) {
+	root := t.TempDir()
+	runOK(t, "--root", root, "init", "--workspace-id", "cairn:workspace:health")
+	runOK(t, "--root", root, "note", "--actor", "tester", "--title", "Health Candidate", "--type", "runbook")
+	runOK(t, "--root", root, "promote", "agents/tester/health-candidate.md", "--type", "runbook")
+	if err := os.WriteFile(filepath.Join(root, "runbooks", "manual.md"), []byte("# Manual\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	stdout, stderr, code := run(t, "--root", root, "health", "report")
+	if code != 0 {
+		t.Fatalf("health report code=%d stderr=%s", code, stderr)
+	}
+	for _, expected := range []string{
+		"# Cairn Knowledge Health",
+		"Workspace: cairn:workspace:health",
+		"## Documents By Status",
+		"## Proposed Documents Awaiting Review",
+		"Health Candidate (`runbooks/health-candidate.md`)",
+		"## Validation Findings",
+		"runbooks/manual.md",
+		"## Index And Sync",
+	} {
+		if !strings.Contains(stdout, expected) {
+			t.Fatalf("health report missing %q:\n%s", expected, stdout)
+		}
+	}
+
+	stdout, stderr, code = run(t, "--root", root, "health", "report", "--output", ".cairn/generated/health.md")
+	if code != 0 {
+		t.Fatalf("health report output code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Wrote health report .cairn/generated/health.md") {
+		t.Fatalf("unexpected output stdout:\n%s", stdout)
+	}
+	written := readFile(t, root, ".cairn/generated/health.md")
+	if !strings.Contains(written, "# Cairn Knowledge Health") {
+		t.Fatalf("written health report missing heading:\n%s", written)
+	}
+}
+
 func TestRunVersionAndDoctor(t *testing.T) {
 	root := t.TempDir()
 
@@ -117,6 +252,173 @@ func TestRunVersionAndDoctor(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "Config: present") || !strings.Contains(stdout, "Remote sync: local_fs") {
 		t.Fatalf("unexpected doctor configured stdout:\n%s", stdout)
+	}
+}
+
+func TestRunDoctorFullReportsMissingConfig(t *testing.T) {
+	root := t.TempDir()
+
+	stdout, stderr, code := run(t, "--root", root, "doctor", "--full")
+	if code != 0 {
+		t.Fatalf("doctor --full code=%d stderr=%s", code, stderr)
+	}
+	for _, expected := range []string{
+		"Full readiness:",
+		"- Config: fail (missing)",
+		"- Managed folders: skip (config is missing)",
+		"- MCP tools: skip (config is missing)",
+		"Next: run `cairn init`",
+	} {
+		if !strings.Contains(stdout, expected) {
+			t.Fatalf("doctor --full missing %q:\n%s", expected, stdout)
+		}
+	}
+}
+
+func TestRunDoctorFullReportsUnreadableConfigAsStructuredCheck(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".cairn", "config.yaml"), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+
+	stdout, stderr, code := run(t, "--root", root, "doctor", "--full")
+	if code != 0 {
+		t.Fatalf("doctor --full code=%d stderr=%s", code, stderr)
+	}
+	for _, expected := range []string{
+		"- Config: pass (present)",
+		"- Config: fail",
+		"- Managed folders: skip (config could not be loaded)",
+		"- MCP tools: skip (config could not be loaded)",
+	} {
+		if !strings.Contains(stdout, expected) {
+			t.Fatalf("doctor --full missing %q:\n%s", expected, stdout)
+		}
+	}
+	if stderr != "" {
+		t.Fatalf("doctor --full should not emit raw stderr, got %q", stderr)
+	}
+}
+
+func TestRunDoctorFullReportsHealthyLocalWorkspace(t *testing.T) {
+	root := t.TempDir()
+	remoteRoot := filepath.Join(t.TempDir(), "remote")
+	runOK(t, "--root", root, "setup", "local-sync", "--workspace-id", "cairn:workspace:test", "--remote-root", remoteRoot)
+	runOK(t, "--root", root, "capture", "--actor", "codex", "--title", "Doctor Searchable", "--body", "health body")
+	runOK(t, "--root", root, "index", "refresh")
+
+	stdout, stderr, code := run(t, "--root", root, "doctor", "--full", "--remote")
+	if code != 0 {
+		t.Fatalf("doctor --full --remote code=%d stderr=%s", code, stderr)
+	}
+	for _, expected := range []string{
+		"- Config: pass (present)",
+		"- Managed folders: pass",
+		"- Schemas: pass",
+		"- Validation: pass",
+		"- Local index: pass (available)",
+		"- Search sanity: pass",
+		"- Sync status: pass",
+		"- Remote reachability: pass",
+		"- MCP tools: pass",
+	} {
+		if !strings.Contains(stdout, expected) {
+			t.Fatalf("doctor --full missing %q:\n%s", expected, stdout)
+		}
+	}
+}
+
+func TestRunDoctorFullReportsValidationWarnings(t *testing.T) {
+	root := t.TempDir()
+	runOK(t, "--root", root, "init", "--workspace-id", "cairn:workspace:test")
+	if err := os.WriteFile(filepath.Join(root, "runbooks", "manual.md"), []byte("# Manual\n\nMissing frontmatter."), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	stdout, stderr, code := run(t, "--root", root, "doctor", "--full")
+	if code != 0 {
+		t.Fatalf("doctor --full code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "- Validation: warn") {
+		t.Fatalf("doctor --full should report validation warning:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Next: review warnings before promoting or syncing durable knowledge.") {
+		t.Fatalf("doctor --full should include warning next step:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "- Remote reachability: warn (remote sync is not configured)") {
+		t.Fatalf("doctor --full should report unconfigured remote:\n%s", stdout)
+	}
+}
+
+func TestRunNoteCreatesTypedTemplateWithDefaultActor(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("CAIRN_ACTOR", "Pilot Dev")
+
+	stdout, stderr, code := run(t, "--root", root, "note", "--title", "Restart Worker", "--type", "runbook")
+	if code != 0 {
+		t.Fatalf("note code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Captured agents/pilot-dev/restart-worker.md") {
+		t.Fatalf("unexpected note stdout:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Next: validate the workspace") || !strings.Contains(stdout, "Next: promote the document") || !strings.Contains(stdout, "Next: sync the workspace") {
+		t.Fatalf("note should include validate/promote/sync next steps:\n%s", stdout)
+	}
+	content := readFile(t, root, "agents/pilot-dev/restart-worker.md")
+	for _, expected := range []string{"type: runbook", "actors:\n  - pilot-dev", "## Steps", "## Verification"} {
+		if !strings.Contains(content, expected) {
+			t.Fatalf("captured note missing %q:\n%s", expected, content)
+		}
+	}
+}
+
+func TestRunNoteSupportsCommonCaptureTypes(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("CAIRN_ACTOR", "pilot")
+	for _, docType := range []string{"note", "investigation", "handoff", "decision", "runbook"} {
+		title := "Type " + docType
+		stdout, stderr, code := run(t, "--root", root, "note", "--title", title, "--type", docType)
+		if code != 0 {
+			t.Fatalf("note type %s code=%d stderr=%s", docType, code, stderr)
+		}
+		if !strings.Contains(stdout, "Captured agents/pilot/type-"+docType+".md") {
+			t.Fatalf("unexpected stdout for type %s:\n%s", docType, stdout)
+		}
+		content := readFile(t, root, "agents/pilot/type-"+docType+".md")
+		if !strings.Contains(content, "type: "+docType) {
+			t.Fatalf("captured note missing type %s:\n%s", docType, content)
+		}
+	}
+}
+
+func TestRunCaptureInteractivePromptsForMissingFields(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("CAIRN_ACTOR", "")
+	t.Setenv("USER", "")
+	t.Setenv("USERNAME", "")
+	input := strings.Join([]string{
+		"pilot",
+		"Interactive Handoff",
+		"handoff",
+		"# Interactive Handoff",
+		"",
+		"Ready for review.",
+		".",
+		"",
+	}, "\n")
+	stdout, stderr, code := runWithInput(t, strings.NewReader(input), "--root", root, "capture", "--interactive")
+	if code != 0 {
+		t.Fatalf("capture --interactive code=%d stderr=%s stdout=%s", code, stderr, stdout)
+	}
+	if !strings.Contains(stdout, "Actor: ") || !strings.Contains(stdout, "Title: ") || !strings.Contains(stdout, "Type [note]: ") || !strings.Contains(stdout, "Body: enter markdown") {
+		t.Fatalf("interactive capture should prompt for missing fields:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Captured agents/pilot/interactive-handoff.md") {
+		t.Fatalf("unexpected stdout:\n%s", stdout)
+	}
+	content := readFile(t, root, "agents/pilot/interactive-handoff.md")
+	if !strings.Contains(content, "type: handoff") || !strings.Contains(content, "Ready for review.") {
+		t.Fatalf("interactive capture wrote unexpected content:\n%s", content)
 	}
 }
 
@@ -321,9 +623,14 @@ func runOK(t *testing.T, args ...string) string {
 
 func run(t *testing.T, args ...string) (string, string, int) {
 	t.Helper()
+	return runWithInput(t, strings.NewReader(""), args...)
+}
+
+func runWithInput(t *testing.T, stdin io.Reader, args ...string) (string, string, int) {
+	t.Helper()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	code := Run(context.Background(), args, strings.NewReader(""), &stdout, &stderr)
+	code := Run(context.Background(), args, stdin, &stdout, &stderr)
 	return stdout.String(), stderr.String(), code
 }
 
@@ -334,4 +641,24 @@ func readFile(t *testing.T, root string, rel string) string {
 		t.Fatalf("ReadFile(%s) error = %v", rel, err)
 	}
 	return string(content)
+}
+
+func writeADOPayload(t *testing.T, root string) string {
+	t.Helper()
+	path := filepath.Join(root, "ado-pr.json")
+	if err := os.WriteFile(path, []byte(`{
+	  "resource": {
+	    "pullRequestId": 42,
+	    "title": "Add checkout retry",
+	    "description": "Retries transient checkout failures.",
+	    "sourceRefName": "refs/heads/feature/retry",
+	    "targetRefName": "refs/heads/main",
+	    "url": "https://dev.azure.com/org/project/_git/payments/pullrequest/42",
+	    "repository": {"name": "payments-api"},
+	    "closedBy": {"displayName": "Ada Lovelace"}
+	  }
+	}`), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	return path
 }

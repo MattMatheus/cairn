@@ -4,6 +4,12 @@ Engineering work accepted by QA.
 
 ## Recently Accepted
 
+- `STORY-20260508-knowledge-health-report`
+- `STORY-20260508-vscode-workspace-helpers`
+- `STORY-20260508-ado-lifecycle-candidate-capture`
+- `STORY-20260508-repo-attachment-discovery`
+- `STORY-20260508-interactive-capture-flow`
+- `STORY-20260508-doctor-full-pilot-readiness`
 - `STORY-20260507-core-v1-docs-and-quickstart`
 - `STORY-20260507-disable-remote-index-mainline`
 - `STORY-20260507-local-blob-sync-smoke`

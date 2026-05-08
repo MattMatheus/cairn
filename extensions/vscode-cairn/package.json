@@ -1,0 +1,63 @@
+{
+  "name": "cairn-vscode",
+  "displayName": "Cairn",
+  "description": "Command-palette helpers for Cairn workspaces.",
+  "version": "0.1.0",
+  "publisher": "cairn",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:cairn.captureNote",
+    "onCommand:cairn.search",
+    "onCommand:cairn.promoteCurrentFile",
+    "onCommand:cairn.validateWorkspace",
+    "onCommand:cairn.doctorFull"
+  ],
+  "main": "./src/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Cairn",
+      "properties": {
+        "cairn.cliPath": {
+          "type": "string",
+          "default": "cairn",
+          "description": "Path to the Cairn CLI."
+        },
+        "cairn.workspacePath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional explicit Cairn workspace path. When empty, the extension discovers the workspace from the current VS Code folder."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "cairn.captureNote",
+        "title": "Cairn: Capture Note"
+      },
+      {
+        "command": "cairn.search",
+        "title": "Cairn: Search"
+      },
+      {
+        "command": "cairn.promoteCurrentFile",
+        "title": "Cairn: Promote Current File"
+      },
+      {
+        "command": "cairn.validateWorkspace",
+        "title": "Cairn: Validate Workspace"
+      },
+      {
+        "command": "cairn.doctorFull",
+        "title": "Cairn: Show Doctor"
+      }
+    ]
+  },
+  "scripts": {
+    "test": "node test/cairnCli.test.js"
+  }
+}

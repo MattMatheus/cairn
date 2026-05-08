@@ -62,6 +62,9 @@ func NewAzureBlobStore(config AzureBlobConfig, provider TokenProvider) (*AzureBl
 	if config.Container == "" {
 		return nil, errors.New("azure blob container is required")
 	}
+	if config.AuthMode == "azurite" && !isLocalAzuriteEndpoint(config.Endpoint) {
+		return nil, errors.New("azurite auth mode requires a localhost endpoint")
+	}
 	if provider == nil && config.AuthMode != "azurite" {
 		provider = AzureCLITokenProvider{}
 	}
@@ -231,9 +234,17 @@ func (s *AzureBlobStore) client() *http.Client {
 	return http.DefaultClient
 }
 
-func authorize(req *http.Request, token string) {
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("x-ms-version", "2023-11-03")
+func isLocalAzuriteEndpoint(endpoint string) bool {
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(parsed.Hostname()) {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		return false
+	}
 }
 
 func authorizeAzurite(req *http.Request) error {

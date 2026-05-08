@@ -13,8 +13,10 @@ A pilot engineer should be able to:
 - inspect visible markdown documents
 - capture a new document
 - validate the workspace
+- run a full readiness check
 - refresh the local SQLite index
 - find documents with local search
+- use the short human capture path
 - push and pull through a no-service `local_fs` remote store
 - see that conflicts are refused rather than silently merged
 
@@ -69,6 +71,7 @@ WORK_ROOT="$(mktemp -d)/cairn-pilot"
 cairn --root "$WORK_ROOT" init --workspace-id cairn:workspace:pilot
 test -f "$WORK_ROOT/.cairn/config.yaml"
 cairn --root "$WORK_ROOT" doctor
+cairn --root "$WORK_ROOT" doctor --full
 ```
 
 Expected:
@@ -143,6 +146,27 @@ The result should include `runbooks/pilot-handshake.md`.
 
 ## Capture A New Note
 
+For a non-AI developer, start with the short capture path:
+
+```sh
+cairn --root "$WORK_ROOT" note \
+  --actor "$USER" \
+  --title "Pilot First Impression" \
+  --type note \
+  --body "Cairn should make local context easier to inspect and share."
+```
+
+Expected: Cairn prints the created path and next steps. The new document should be a normal markdown file under `agents/<actor>/`.
+
+Run:
+
+```sh
+cairn --root "$WORK_ROOT" validate
+cairn --root "$WORK_ROOT" search "first impression"
+```
+
+The explicit capture command is still available for agents and automation:
+
 ```sh
 cairn capture \
   --actor "$USER" \
@@ -160,6 +184,22 @@ Run:
 cairn validate
 cairn search "first impression"
 ```
+
+## Try Multi-Repo Discovery
+
+For pods with more than one repo, keep one Cairn KB and attach repos as references:
+
+```sh
+BASE="$(mktemp -d)"
+mkdir "$BASE/cairn-kb" "$BASE/repo-a" "$BASE/repo-b"
+cairn --root "$BASE/cairn-kb" init --workspace-id cairn:workspace:repo-pilot
+cairn --root "$BASE/cairn-kb" repo attach --name repo-a --path ../repo-a
+cairn --root "$BASE/cairn-kb" repo attach --name repo-b --path ../repo-b
+cairn --root "$BASE/cairn-kb" repo list
+cairn repo discover --from "$BASE/repo-a"
+```
+
+Expected: `repo list` shows both repos and `repo discover` points back to the single Cairn workspace. Cairn should clearly state that repo attachment is reference metadata only.
 
 ## Try No-Service Sync
 
@@ -201,6 +241,16 @@ Core smoke passed.
 
 That script creates a deterministic local/remote divergence and verifies that Cairn reports `Sync diverged: true` plus a `Conflict:` line.
 
+## Generate A Local Health Report
+
+```sh
+cairn --root "$WORK_ROOT" health report
+cairn --root "$WORK_ROOT" health report --output .cairn/generated/health.md
+```
+
+Expected: a markdown report with document counts, proposed docs, validation findings, index state, sync counts, and suggested follow-up. This is local-only descriptive output, not telemetry.
+Keep generated reports under `.cairn/generated/` unless you plan to turn the content into a managed Cairn document.
+
 ## What To Report
 
 Ask the pilot engineer to write down:
@@ -210,6 +260,8 @@ Ask the pilot engineer to write down:
 - whether the markdown files felt trustworthy
 - whether search found what they expected
 - whether sync behavior was understandable
+- whether `doctor --full` and `health report` made the workspace state easier to understand
+- whether `cairn note` felt easier than full capture syntax
 - what they expected Cairn to do that it did not do
 
 ## Known Pilot Limits
@@ -218,3 +270,4 @@ Ask the pilot engineer to write down:
 - `local_fs` is a no-service blob-style remote store for pilot testing, not production storage.
 - Azure Blob is the multiplayer backend path. It is documented in [Azure Blob Sync](azure-sync.md), but is not required for the first no-service pilot script.
 - Remote indexer and CocoIndex work are deferred until the core workflow survives pilot feedback.
+- The VS Code helper under `extensions/vscode-cairn` is a scaffold; run a VS Code Extension Host smoke before giving it to pilot users.

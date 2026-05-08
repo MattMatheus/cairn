@@ -128,8 +128,20 @@ func (s *LocalFSStore) objectPath(path string) (string, error) {
 }
 
 func (s *LocalFSStore) rawObjectPath(objectName string) (string, error) {
-	if objectName == ".." || strings.HasPrefix(objectName, "../") {
+	root, err := filepath.Abs(s.Root)
+	if err != nil {
+		return "", err
+	}
+	absolutePath, err := filepath.Abs(filepath.Join(root, filepath.FromSlash(objectName)))
+	if err != nil {
+		return "", err
+	}
+	rel, err := filepath.Rel(root, absolutePath)
+	if err != nil {
+		return "", err
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", errors.New("unsafe local_fs object path")
 	}
-	return filepath.Join(s.Root, filepath.FromSlash(objectName)), nil
+	return absolutePath, nil
 }

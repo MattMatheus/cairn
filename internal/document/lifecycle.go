@@ -107,7 +107,7 @@ func (w Workspace) Capture(opts CaptureOptions) (OperationResult, error) {
 	return OperationResult{
 		Path:       relativePath,
 		DocumentID: metadata.ID,
-		NextSteps:  []string{"promote the document when it is ready for review", "sync the workspace when sharing is needed"},
+		NextSteps:  []string{"validate the workspace before sharing", "promote the document when it is ready for review", "sync the workspace when sharing is needed"},
 	}, nil
 }
 

@@ -37,6 +37,8 @@ go run ./cmd/cairn help
 
 Cairn Core v1 is local-first: documents are visible markdown files, search/indexing is local SQLite metadata and full text, and remote sharing is blob-backed sync with conflict refusal. The default quickstart does not require Docker, Postgres, pgvector, CocoIndex, or a remote indexer.
 
+Pilot polish helpers include `doctor --full`, `note`, `repo attach/list/discover`, `ado capture`, `health report`, and a small VS Code command-palette scaffold under `extensions/vscode-cairn`.
+
 For no-service sync development, use the `local_fs` remote-store example in the quickstart. `deployments/local-dev/` contains the no-service local smoke and sample config for that path.
 
 Run the no-service Cairn Core smoke with:
