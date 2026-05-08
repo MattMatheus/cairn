@@ -2,21 +2,49 @@ name: release
 
 on:
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Release tag to build, for example v0.1"
-        required: true
-        type: string
   push:
-    tags:
-      - "v*"
-      - "[0-9]*"
+    branches:
+      - main
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.next.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Create next release tag
+        id: next
+        run: |
+          git fetch --tags --force
+          latest="$(git tag --list 'v0.[0-9]*' | sed -n 's/^v0\.\([0-9][0-9]*\)$/\1/p' | sort -n | tail -n 1)"
+          if [ -z "$latest" ]; then
+            next=1
+          else
+            next=$((latest + 1))
+          fi
+          tag="v0.${next}"
+          while git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; do
+            next=$((next + 1))
+            tag="v0.${next}"
+          done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "${tag}" "${GITHUB_SHA}"
+          git push origin "refs/tags/${tag}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: version
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -37,7 +65,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          ref: ${{ needs.version.outputs.tag }}
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -47,7 +75,7 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          VERSION: ${{ needs.version.outputs.tag }}
         run: |
           mkdir -p dist
           if [ "$GOOS" = "windows" ]; then
@@ -59,13 +87,15 @@ jobs:
             tar -C dist -czf "dist/cairn_${GOOS}_${GOARCH}.tar.gz" cairn
             rm dist/cairn
           fi
+          (cd dist && sha256sum cairn_${GOOS}_${GOARCH}.* > "cairn_${GOOS}_${GOARCH}.sha256")
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          tag_name: ${{ needs.version.outputs.tag }}
           fail_on_unmatched_files: true
           overwrite_files: true
           make_latest: true
           files: |
             dist/*.tar.gz
             dist/*.zip
+            dist/*.sha256
