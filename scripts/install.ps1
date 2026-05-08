@@ -27,12 +27,16 @@ if ($Version -eq "latest") {
     $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases?per_page=20"
     $release = $releases | Select-Object -First 1
     if (-not $release -or -not $release.tag_name) {
-      throw "Could not find a published Cairn release. Set CAIRN_VERSION to a tag such as v0.1."
+      throw "Could not find a published Cairn release. Set CAIRN_VERSION to a tag such as v0.N."
     }
     $Version = $release.tag_name
   }
+  Write-Host "Resolved latest Cairn release: $Version"
+} else {
+  Write-Host "Using requested Cairn release: $Version"
 }
 $url = "https://github.com/$Repo/releases/download/$Version/$asset"
+$checksumUrl = "https://github.com/$Repo/releases/download/$Version/cairn_windows_${arch}.sha256"
 
 $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName())
 New-Item -ItemType Directory -Path $tmp | Out-Null
@@ -41,10 +45,26 @@ try {
   New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
   Write-Host "Downloading $url"
   Invoke-WebRequest -Uri $url -OutFile $archive
+  try {
+    $checksumPath = Join-Path $tmp "$asset.sha256"
+    Invoke-WebRequest -Uri $checksumUrl -OutFile $checksumPath
+    $expected = ((Get-Content $checksumPath -Raw) -split "\s+")[0]
+    $actual = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+    if ($actual -ne $expected.ToLowerInvariant()) {
+      throw "Checksum mismatch for $asset"
+    }
+    Write-Host "$asset: OK"
+  } catch {
+    throw "Failed to verify $asset`: $($_.Exception.Message)"
+  }
   Expand-Archive -Path $archive -DestinationPath $tmp -Force
   Copy-Item -Path (Join-Path $tmp "cairn.exe") -Destination (Join-Path $InstallDir "cairn.exe") -Force
   Write-Host "Installed cairn to $(Join-Path $InstallDir "cairn.exe")"
-  & (Join-Path $InstallDir "cairn.exe") version
+  $installedVersion = & (Join-Path $InstallDir "cairn.exe") version
+  Write-Host $installedVersion
+  if ($installedVersion -notlike "*$Version*") {
+    Write-Warning "Installed binary version did not include expected release $Version"
+  }
   if (($env:PATH -split ";") -notcontains $InstallDir) {
     Write-Host "Add $InstallDir to PATH before running cairn from a new shell."
   }
