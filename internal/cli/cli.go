@@ -40,6 +40,8 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, 
 	switch rest[0] {
 	case "setup":
 		runErr = runSetup(rest[1:], opts, stdout)
+	case "repo":
+		runErr = runRepo(rest[1:], opts, stdout)
 	case "version":
 		runErr = runVersion(rest[1:], stdout)
 	case "doctor":
@@ -78,6 +80,81 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, 
 		return 1
 	}
 	return 0
+}
+
+func runRepo(args []string, opts options, stdout io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: cairn repo attach --name NAME --path RELPATH [--url URL] [--no-pointer] | list | discover [--from DIR]")
+	}
+	switch args[0] {
+	case "attach":
+		fs := newFlagSet("repo attach")
+		name := fs.String("name", "", "repo name")
+		path := fs.String("path", "", "repo path relative to the Cairn workspace")
+		url := fs.String("url", "", "repo URL")
+		noPointer := fs.Bool("no-pointer", false, "do not write a .cairn-workspace pointer into the repo")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		result, err := workspace.AttachRepo(opts.root, workspace.RepoAttachOptions{
+			Name:         *name,
+			Path:         *path,
+			URL:          *url,
+			WritePointer: !*noPointer,
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "Attached repo %s -> %s\n", result.Repo.Name, result.Repo.Path)
+		fmt.Fprintf(stdout, "Recorded metadata in %s\n", filepath.ToSlash(result.ConfigPath))
+		if result.PointerPath != "" {
+			fmt.Fprintf(stdout, "Wrote workspace pointer %s\n", filepath.ToSlash(result.PointerPath))
+		}
+		fmt.Fprintln(stdout, "Repo attachment is reference metadata only; Cairn will not clone, index, sync, or validate repo contents.")
+		return nil
+	case "list":
+		if len(args) != 1 {
+			return fmt.Errorf("usage: cairn repo list")
+		}
+		repos, err := workspace.LoadRepos(opts.root)
+		if err != nil {
+			return err
+		}
+		if len(repos) == 0 {
+			fmt.Fprintln(stdout, "No attached repos.")
+			fmt.Fprintln(stdout, "Repo attachment is reference metadata only; Cairn will not clone, index, sync, or validate repo contents.")
+			return nil
+		}
+		fmt.Fprintf(stdout, "Attached repos (%d):\n", len(repos))
+		for _, repo := range repos {
+			fmt.Fprintf(stdout, "- %s -> %s", repo.Name, repo.Path)
+			if repo.URL != "" {
+				fmt.Fprintf(stdout, " (%s)", repo.URL)
+			}
+			fmt.Fprintln(stdout)
+		}
+		fmt.Fprintln(stdout, "Repo attachment is reference metadata only; Cairn will not clone, index, sync, or validate repo contents.")
+		return nil
+	case "discover":
+		fs := newFlagSet("repo discover")
+		from := fs.String("from", ".", "repo path or child path to discover from")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if fs.NArg() != 0 {
+			return fmt.Errorf("usage: cairn repo discover [--from DIR]")
+		}
+		result, err := workspace.DiscoverWorkspace(*from)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "Cairn workspace: %s\n", filepath.ToSlash(result.WorkspacePath))
+		fmt.Fprintf(stdout, "Discovered via: %s\n", filepath.ToSlash(result.PointerPath))
+		fmt.Fprintln(stdout, "Discovery follows an explicit .cairn-workspace pointer; repo contents remain outside Cairn management.")
+		return nil
+	default:
+		return fmt.Errorf("usage: cairn repo attach --name NAME --path RELPATH [--url URL] [--no-pointer] | list | discover [--from DIR]")
+	}
 }
 
 func parseGlobal(args []string) (options, []string, error) {
@@ -1004,7 +1081,7 @@ func newFlagSet(name string) *flag.FlagSet {
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: cairn [--root DIR] <command> [options]")
-	fmt.Fprintln(w, "commands: version, doctor, setup local-sync|azure-sync, init, note, capture, promote, archive, purge, validate, search, index status, sync status, mcp readonly|local-writes|remote-writes")
+	fmt.Fprintln(w, "commands: version, doctor, setup local-sync|azure-sync, init, repo attach|list|discover, note, capture, promote, archive, purge, validate, search, index status, sync status, mcp readonly|local-writes|remote-writes")
 }
 
 func runMCP(ctx context.Context, args []string, opts options, stdin io.Reader, stdout io.Writer) error {

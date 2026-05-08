@@ -92,6 +92,45 @@ func TestRunSetupAzureSyncCreatesConfig(t *testing.T) {
 	}
 }
 
+func TestRunRepoAttachListAndDiscover(t *testing.T) {
+	podRoot := t.TempDir()
+	repoRoot := filepath.Join(filepath.Dir(podRoot), "payments-api")
+	if err := os.MkdirAll(repoRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	runOK(t, "--root", podRoot, "init", "--workspace-id", "cairn:workspace:test")
+
+	stdout, stderr, code := run(t, "--root", podRoot, "repo", "attach", "--name", "payments-api", "--path", "../payments-api", "--url", "https://dev.azure.com/org/project/_git/payments-api")
+	if code != 0 {
+		t.Fatalf("repo attach code=%d stderr=%s", code, stderr)
+	}
+	for _, expected := range []string{
+		"Attached repo payments-api -> ../payments-api",
+		"Wrote workspace pointer",
+		"Cairn will not clone, index, sync, or validate repo contents",
+	} {
+		if !strings.Contains(stdout, expected) {
+			t.Fatalf("repo attach missing %q:\n%s", expected, stdout)
+		}
+	}
+
+	stdout, stderr, code = run(t, "--root", podRoot, "repo", "list")
+	if code != 0 {
+		t.Fatalf("repo list code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "payments-api -> ../payments-api") || !strings.Contains(stdout, "reference metadata only") {
+		t.Fatalf("unexpected repo list stdout:\n%s", stdout)
+	}
+
+	stdout, stderr, code = run(t, "repo", "discover", "--from", repoRoot)
+	if code != 0 {
+		t.Fatalf("repo discover code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Cairn workspace: "+filepath.ToSlash(podRoot)) || !strings.Contains(stdout, "explicit .cairn-workspace pointer") {
+		t.Fatalf("unexpected repo discover stdout:\n%s", stdout)
+	}
+}
+
 func TestRunVersionAndDoctor(t *testing.T) {
 	root := t.TempDir()
 
