@@ -275,6 +275,31 @@ func TestRunDoctorFullReportsMissingConfig(t *testing.T) {
 	}
 }
 
+func TestRunDoctorFullReportsUnreadableConfigAsStructuredCheck(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".cairn", "config.yaml"), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+
+	stdout, stderr, code := run(t, "--root", root, "doctor", "--full")
+	if code != 0 {
+		t.Fatalf("doctor --full code=%d stderr=%s", code, stderr)
+	}
+	for _, expected := range []string{
+		"- Config: pass (present)",
+		"- Config: fail",
+		"- Managed folders: skip (config could not be loaded)",
+		"- MCP tools: skip (config could not be loaded)",
+	} {
+		if !strings.Contains(stdout, expected) {
+			t.Fatalf("doctor --full missing %q:\n%s", expected, stdout)
+		}
+	}
+	if stderr != "" {
+		t.Fatalf("doctor --full should not emit raw stderr, got %q", stderr)
+	}
+}
+
 func TestRunDoctorFullReportsHealthyLocalWorkspace(t *testing.T) {
 	root := t.TempDir()
 	remoteRoot := filepath.Join(t.TempDir(), "remote")

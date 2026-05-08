@@ -181,6 +181,17 @@ func TestAzureBlobStoreAzuriteAuthUsesSharedKey(t *testing.T) {
 	}
 }
 
+func TestAzureBlobStoreRejectsAzuriteAuthForNonLocalEndpoint(t *testing.T) {
+	_, err := NewAzureBlobStore(AzureBlobConfig{
+		Endpoint:  "https://cairnpilot.blob.core.windows.net",
+		Container: "cairn",
+		AuthMode:  "azurite",
+	}, nil)
+	if err == nil || !strings.Contains(err.Error(), "azurite auth mode requires a localhost endpoint") {
+		t.Fatalf("expected localhost azurite error, got %v", err)
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {

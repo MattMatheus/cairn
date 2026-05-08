@@ -524,7 +524,16 @@ func runDoctorFull(ctx context.Context, opts options, checkRemote bool, stdout i
 
 	cfg, err := document.LoadConfig(absRoot)
 	if err != nil {
-		return err
+		printCheck(stdout, "Config", "fail", err.Error())
+		printCheck(stdout, "Managed folders", "skip", "config could not be loaded")
+		printCheck(stdout, "Schemas", "skip", "config could not be loaded")
+		printCheck(stdout, "Validation", "skip", "config could not be loaded")
+		printCheck(stdout, "Local index", "skip", "config could not be loaded")
+		printCheck(stdout, "Search sanity", "skip", "config could not be loaded")
+		printCheck(stdout, "Sync status", "skip", "config could not be loaded")
+		printCheck(stdout, "Remote reachability", "skip", "config could not be loaded")
+		printCheck(stdout, "MCP tools", "skip", "config could not be loaded")
+		return nil
 	}
 	if cfg.WorkspaceID != "" {
 		fmt.Fprintf(stdout, "Workspace id: %s\n", cfg.WorkspaceID)

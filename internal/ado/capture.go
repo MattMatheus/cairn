@@ -32,7 +32,7 @@ func BuildCandidate(event string, payload []byte) (Candidate, error) {
 	if prTitle == "" {
 		prTitle = "ADO PR Completed"
 	}
-	prID := firstString(resource, "pullRequestId", "pullRequestId")
+	prID := firstString(resource, "pullRequestId")
 	repoName := firstString(repo, "name")
 	sourceRef := trimRef(firstString(resource, "sourceRefName"))
 	targetRef := trimRef(firstString(resource, "targetRefName"))

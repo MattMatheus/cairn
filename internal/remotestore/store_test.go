@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -98,6 +99,18 @@ func TestLocalFSStoreManifestAndObjects(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(store.Root, "pod-a", ".cairn", "remote-manifest.json")); err != nil {
 		t.Fatalf("manifest not written under prefix: %v", err)
+	}
+}
+
+func TestLocalFSStoreRejectsNestedTraversal(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewLocalFSStore(t.TempDir(), "")
+	if err != nil {
+		t.Fatalf("NewLocalFSStore() error = %v", err)
+	}
+
+	if err := store.WriteObject(ctx, "a/../../outside", []byte("nope")); err == nil || !strings.Contains(err.Error(), "unsafe local_fs object path") {
+		t.Fatalf("expected unsafe path error, got %v", err)
 	}
 }
 
