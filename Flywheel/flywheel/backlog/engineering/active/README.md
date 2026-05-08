@@ -8,17 +8,19 @@ No active engineering stories.
 
 ## Next Ready Candidates
 
-No ready candidates outside the active sequence.
+1. `../intake/STORY-20260508-interactive-capture-flow.md`
+2. `../intake/STORY-20260508-repo-attachment-discovery.md`
+3. `../intake/STORY-20260508-ado-lifecycle-candidate-capture.md`
+4. `../intake/STORY-20260508-vscode-workspace-helpers.md`
+5. `../intake/STORY-20260508-knowledge-health-report.md`
 
 ## Batch Goal
 
-Reframe Cairn v1 as Cairn Core: a local-first markdown workspace with managed document lifecycle, validation, local SQLite metadata/full-text search, MCP operations, blob-backed sync, and conflict refusal. CocoIndex, pgvector, remote semantic search, and the remote indexer are deferred rich-retrieval work, not required v1 infrastructure.
+Polish Cairn for internal pilot rollout by reducing first-run friction, supporting non-AI developers, and keeping one pod knowledge base usable alongside multiple code repositories.
 
 ## PM Notes
 
-- Planning note: `Flywheel/flywheel/artifacts/planning/PLAN-20260507-cairn-core-v1-rescope.md`.
-- Architecture accepted: `Flywheel/flywheel/backlog/architecture/done/ARCH-20260507-core-v1-indexing-boundary-refresh.md`.
-- PM promoted the Cairn Core v1 batch on 2026-05-07.
-- Required Cairn Core v1 stories are complete: docs/quickstart, local-only runtime behavior, no-service blob-sync smoke, and pilot-readiness hardening.
-- CocoIndex deferral cleanup is done with `release_scope: deferred`.
-- Engineering active queue is clear and ready for code review.
+- Planning note: `Flywheel/flywheel/artifacts/planning/PLAN-20260508-pilot-polish-roadmap.md`.
+- PM activated the first pilot polish story on 2026-05-08.
+- `STORY-20260508-doctor-full-pilot-readiness` moved to QA on 2026-05-08.
+- Follow-on intake order is interactive capture, repo attachment/discovery, ADO lifecycle candidate capture, VS Code helpers, and knowledge health reporting.

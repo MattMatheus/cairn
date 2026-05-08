@@ -203,11 +203,15 @@ func runInit(args []string, opts options, stdout io.Writer) error {
 func runDoctor(ctx context.Context, args []string, opts options, stdout io.Writer) error {
 	fs := newFlagSet("doctor")
 	checkRemote := fs.Bool("remote", false, "check remote store reachability")
+	full := fs.Bool("full", false, "run full pilot readiness checks")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return fmt.Errorf("usage: cairn doctor [--remote]")
+		return fmt.Errorf("usage: cairn doctor [--full] [--remote]")
+	}
+	if *full {
+		return runDoctorFull(ctx, opts, *checkRemote, stdout)
 	}
 	absRoot, err := filepath.Abs(opts.root)
 	if err != nil {
@@ -278,6 +282,202 @@ func runDoctor(ctx context.Context, args []string, opts options, stdout io.Write
 		}
 	}
 	return nil
+}
+
+func runDoctorFull(ctx context.Context, opts options, checkRemote bool, stdout io.Writer) error {
+	absRoot, err := filepath.Abs(opts.root)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "Cairn version: %s\n", Version)
+	fmt.Fprintf(stdout, "Workspace root: %s\n", absRoot)
+	fmt.Fprintln(stdout, "Full readiness:")
+
+	configPath := filepath.Join(absRoot, ".cairn", "config.yaml")
+	configPresent := false
+	if _, err := os.Stat(configPath); err == nil {
+		configPresent = true
+		printCheck(stdout, "Config", "pass", "present")
+	} else if os.IsNotExist(err) {
+		printCheck(stdout, "Config", "fail", "missing")
+		fmt.Fprintln(stdout, "Next: run `cairn init` or `cairn setup local-sync --remote-root DIR`.")
+	} else {
+		printCheck(stdout, "Config", "fail", err.Error())
+	}
+
+	if !configPresent {
+		printCheck(stdout, "Managed folders", "skip", "config is missing")
+		printCheck(stdout, "Schemas", "skip", "config is missing")
+		printCheck(stdout, "Validation", "skip", "config is missing")
+		printCheck(stdout, "Local index", "skip", "config is missing")
+		printCheck(stdout, "Search sanity", "skip", "config is missing")
+		printCheck(stdout, "Sync status", "skip", "config is missing")
+		printCheck(stdout, "Remote reachability", "skip", "config is missing")
+		printCheck(stdout, "MCP tools", "skip", "config is missing")
+		return nil
+	}
+
+	cfg, err := document.LoadConfig(absRoot)
+	if err != nil {
+		return err
+	}
+	if cfg.WorkspaceID != "" {
+		fmt.Fprintf(stdout, "Workspace id: %s\n", cfg.WorkspaceID)
+	}
+	reportManagedFolders(absRoot, cfg, stdout)
+
+	validation, err := workspace.Validate(ctx, absRoot, workspace.ValidateOptions{Mode: document.ValidationModeDiscovery})
+	if err != nil {
+		return err
+	}
+	reportSchemaFindings(validation.Findings, stdout)
+	reportValidation(validation, stdout)
+
+	indexAvailableBeforeOpen := false
+	if _, err := os.Stat(localindex.DBPath(absRoot)); err == nil {
+		indexAvailableBeforeOpen = true
+	} else if os.IsNotExist(err) {
+		printCheck(stdout, "Local index", "warn", "missing")
+		fmt.Fprintln(stdout, "Next: run `cairn index refresh`.")
+	} else {
+		printCheck(stdout, "Local index", "fail", err.Error())
+	}
+
+	local, err := mcpops.OpenLocal(absRoot)
+	if err != nil {
+		if indexAvailableBeforeOpen {
+			printCheck(stdout, "Local index", "fail", err.Error())
+		}
+		printCheck(stdout, "Search sanity", "skip", "local workspace operations could not open")
+		printCheck(stdout, "Sync status", "skip", "local workspace operations could not open")
+		printCheck(stdout, "Remote reachability", "skip", "local workspace operations could not open")
+		printCheck(stdout, "MCP tools", "skip", "local workspace operations could not open")
+		return nil
+	}
+	defer local.Close()
+
+	if indexAvailableBeforeOpen {
+		indexStatus, err := local.IndexStatus(ctx, mcpschema.IndexStatusRequest{})
+		if err != nil {
+			printCheck(stdout, "Local index", "fail", err.Error())
+		} else if indexStatus.Data.LocalAvailable {
+			printCheck(stdout, "Local index", "pass", "available")
+		} else {
+			printCheck(stdout, "Local index", "warn", "missing or stale")
+			fmt.Fprintln(stdout, "Next: run `cairn index refresh`.")
+		}
+	}
+
+	if !indexAvailableBeforeOpen {
+		printCheck(stdout, "Search sanity", "skip", "local index is missing")
+	} else if _, err := local.Index.Query(ctx, localindex.Query{Limit: 1}); err != nil {
+		printCheck(stdout, "Search sanity", "fail", err.Error())
+	} else {
+		printCheck(stdout, "Search sanity", "pass", "local query path is usable")
+	}
+
+	syncStatus, err := local.SyncStatus(ctx, mcpschema.EmptyRequest{})
+	if err != nil {
+		printCheck(stdout, "Sync status", "fail", friendlySyncError(err).Error())
+	} else if syncStatus.Data.Diverged || len(syncStatus.Data.Conflicts) > 0 {
+		printCheck(stdout, "Sync status", "warn", "local and remote state diverged")
+		fmt.Fprintln(stdout, "Next: inspect `cairn sync status` and resolve conflicts before mutating sync state.")
+	} else {
+		message := fmt.Sprintf("%d local change(s), %d remote change(s)", len(syncStatus.Data.LocalChanges), len(syncStatus.Data.RemoteChanges))
+		printCheck(stdout, "Sync status", "pass", message)
+	}
+
+	if local.RemoteStore == nil {
+		printCheck(stdout, "Remote reachability", "warn", "remote sync is not configured")
+		fmt.Fprintln(stdout, "Next: run `cairn setup local-sync --remote-root DIR` for a no-service pilot or `cairn setup azure-sync --account ACCOUNT --container CONTAINER` for Azure Blob.")
+	} else if !checkRemote {
+		printCheck(stdout, "Remote reachability", "skip", "pass --remote to check the configured store")
+	} else if _, err := local.RemoteStore.ListObjects(ctx, ""); err != nil {
+		printCheck(stdout, "Remote reachability", "fail", err.Error())
+	} else {
+		printCheck(stdout, "Remote reachability", "pass", "configured store is reachable")
+	}
+
+	readOnly := mcpserver.New(local).Tools()
+	localWrites := mcpserver.New(local, mcpserver.WithLocalWrites()).Tools()
+	remoteWrites := mcpserver.New(local, mcpserver.WithRemoteWrites()).Tools()
+	if len(readOnly) == 0 || len(localWrites) <= len(readOnly) || len(remoteWrites) <= len(readOnly) {
+		printCheck(stdout, "MCP tools", "fail", "expected readonly, local-writes, and remote-writes tool surfaces")
+	} else {
+		printCheck(stdout, "MCP tools", "pass", fmt.Sprintf("readonly=%d local-writes=%d remote-writes=%d", len(readOnly), len(localWrites), len(remoteWrites)))
+	}
+	return nil
+}
+
+func printCheck(stdout io.Writer, label string, status string, message string) {
+	fmt.Fprintf(stdout, "- %s: %s", label, status)
+	if message != "" {
+		fmt.Fprintf(stdout, " (%s)", message)
+	}
+	fmt.Fprintln(stdout)
+}
+
+func reportManagedFolders(root string, cfg document.Config, stdout io.Writer) {
+	missing := 0
+	for _, folder := range cfg.ManagedFolders {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(folder))); os.IsNotExist(err) {
+			missing++
+		}
+	}
+	if missing == 0 {
+		printCheck(stdout, "Managed folders", "pass", fmt.Sprintf("%d configured", len(cfg.ManagedFolders)))
+		return
+	}
+	printCheck(stdout, "Managed folders", "fail", fmt.Sprintf("%d missing", missing))
+	fmt.Fprintln(stdout, "Next: run `cairn init` to create missing starter folders without overwriting existing files.")
+}
+
+func reportSchemaFindings(findings []mcpschema.ValidationFinding, stdout io.Writer) {
+	errors, warnings := countFindings(findings, func(f mcpschema.ValidationFinding) bool {
+		return strings.HasPrefix(f.Path, ".cairn/")
+	})
+	if errors > 0 {
+		printCheck(stdout, "Schemas", "fail", fmt.Sprintf("%d error(s), %d warning(s)", errors, warnings))
+		fmt.Fprintln(stdout, "Next: fix `.cairn/config.yaml` or `.cairn/schemas/*.yaml`, then run `cairn validate` again.")
+		return
+	}
+	if warnings > 0 {
+		printCheck(stdout, "Schemas", "warn", fmt.Sprintf("%d warning(s)", warnings))
+		return
+	}
+	printCheck(stdout, "Schemas", "pass", "config and schema files are valid")
+}
+
+func reportValidation(data mcpschema.ValidateWorkspaceData, stdout io.Writer) {
+	errors, warnings := countFindings(data.Findings, func(f mcpschema.ValidationFinding) bool {
+		return !strings.HasPrefix(f.Path, ".cairn/")
+	})
+	if errors > 0 {
+		printCheck(stdout, "Validation", "fail", fmt.Sprintf("%d error(s), %d warning(s)", errors, warnings))
+		fmt.Fprintln(stdout, "Next: address validation findings, then run `cairn validate` again.")
+		return
+	}
+	if warnings > 0 {
+		printCheck(stdout, "Validation", "warn", fmt.Sprintf("%d warning(s)", warnings))
+		fmt.Fprintln(stdout, "Next: review warnings before promoting or syncing durable knowledge.")
+		return
+	}
+	printCheck(stdout, "Validation", "pass", "managed documents are healthy")
+}
+
+func countFindings(findings []mcpschema.ValidationFinding, include func(mcpschema.ValidationFinding) bool) (int, int) {
+	var errors, warnings int
+	for _, finding := range findings {
+		if !include(finding) {
+			continue
+		}
+		if finding.Severity == string(document.SeverityError) {
+			errors++
+		} else {
+			warnings++
+		}
+	}
+	return errors, warnings
 }
 
 func runCapture(args []string, opts options, stdin io.Reader, stdout io.Writer) error {

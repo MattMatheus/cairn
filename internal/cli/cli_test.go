@@ -120,6 +120,76 @@ func TestRunVersionAndDoctor(t *testing.T) {
 	}
 }
 
+func TestRunDoctorFullReportsMissingConfig(t *testing.T) {
+	root := t.TempDir()
+
+	stdout, stderr, code := run(t, "--root", root, "doctor", "--full")
+	if code != 0 {
+		t.Fatalf("doctor --full code=%d stderr=%s", code, stderr)
+	}
+	for _, expected := range []string{
+		"Full readiness:",
+		"- Config: fail (missing)",
+		"- Managed folders: skip (config is missing)",
+		"- MCP tools: skip (config is missing)",
+		"Next: run `cairn init`",
+	} {
+		if !strings.Contains(stdout, expected) {
+			t.Fatalf("doctor --full missing %q:\n%s", expected, stdout)
+		}
+	}
+}
+
+func TestRunDoctorFullReportsHealthyLocalWorkspace(t *testing.T) {
+	root := t.TempDir()
+	remoteRoot := filepath.Join(t.TempDir(), "remote")
+	runOK(t, "--root", root, "setup", "local-sync", "--workspace-id", "cairn:workspace:test", "--remote-root", remoteRoot)
+	runOK(t, "--root", root, "capture", "--actor", "codex", "--title", "Doctor Searchable", "--body", "health body")
+	runOK(t, "--root", root, "index", "refresh")
+
+	stdout, stderr, code := run(t, "--root", root, "doctor", "--full", "--remote")
+	if code != 0 {
+		t.Fatalf("doctor --full --remote code=%d stderr=%s", code, stderr)
+	}
+	for _, expected := range []string{
+		"- Config: pass (present)",
+		"- Managed folders: pass",
+		"- Schemas: pass",
+		"- Validation: pass",
+		"- Local index: pass (available)",
+		"- Search sanity: pass",
+		"- Sync status: pass",
+		"- Remote reachability: pass",
+		"- MCP tools: pass",
+	} {
+		if !strings.Contains(stdout, expected) {
+			t.Fatalf("doctor --full missing %q:\n%s", expected, stdout)
+		}
+	}
+}
+
+func TestRunDoctorFullReportsValidationWarnings(t *testing.T) {
+	root := t.TempDir()
+	runOK(t, "--root", root, "init", "--workspace-id", "cairn:workspace:test")
+	if err := os.WriteFile(filepath.Join(root, "runbooks", "manual.md"), []byte("# Manual\n\nMissing frontmatter."), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	stdout, stderr, code := run(t, "--root", root, "doctor", "--full")
+	if code != 0 {
+		t.Fatalf("doctor --full code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "- Validation: warn") {
+		t.Fatalf("doctor --full should report validation warning:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Next: review warnings before promoting or syncing durable knowledge.") {
+		t.Fatalf("doctor --full should include warning next step:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "- Remote reachability: warn (remote sync is not configured)") {
+		t.Fatalf("doctor --full should report unconfigured remote:\n%s", stdout)
+	}
+}
+
 func TestRunPromoteArchiveAndIndexStatus(t *testing.T) {
 	root := t.TempDir()
 	runOK(t, "--root", root, "init")
