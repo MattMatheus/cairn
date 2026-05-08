@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"flag"
@@ -45,6 +46,8 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, 
 		runErr = runDoctor(ctx, rest[1:], opts, stdout)
 	case "init":
 		runErr = runInit(rest[1:], opts, stdout)
+	case "note":
+		runErr = runNote(rest[1:], opts, stdin, stdout)
 	case "capture":
 		runErr = runCapture(rest[1:], opts, stdin, stdout)
 	case "promote":
@@ -489,8 +492,20 @@ func runCapture(args []string, opts options, stdin io.Reader, stdout io.Writer) 
 	docType := fs.String("type", "", "document type")
 	authors := fs.String("authors", "", "comma-separated authors")
 	tags := fs.String("tags", "", "comma-separated tags")
+	interactive := fs.Bool("interactive", false, "prompt for missing capture fields")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *interactive {
+		return runInteractiveCapture(captureFields{
+			Actor:    *actor,
+			Title:    *title,
+			Body:     *body,
+			BodyFile: *bodyFile,
+			Type:     *docType,
+			Authors:  splitCSV(*authors),
+			Tags:     splitCSV(*tags),
+		}, opts, stdin, stdout)
 	}
 	content := *body
 	if *bodyFile != "" {
@@ -513,6 +528,224 @@ func runCapture(args []string, opts options, stdin io.Reader, stdout io.Writer) 
 	}
 	printMutation(stdout, "Captured", result)
 	return nil
+}
+
+type captureFields struct {
+	Actor    string
+	Title    string
+	Body     string
+	BodyFile string
+	Type     string
+	Authors  []string
+	Tags     []string
+}
+
+func runNote(args []string, opts options, stdin io.Reader, stdout io.Writer) error {
+	fs := newFlagSet("note")
+	actor := fs.String("actor", "", "actor; defaults to CAIRN_ACTOR, USER, or USERNAME")
+	title := fs.String("title", "", "title")
+	body := fs.String("body", "", "body")
+	bodyFile := fs.String("body-file", "", "body file, or - for stdin")
+	docType := fs.String("type", "note", "document type: note, investigation, handoff, decision, or runbook")
+	authors := fs.String("authors", "", "comma-separated authors")
+	tags := fs.String("tags", "", "comma-separated tags")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *title == "" && fs.NArg() > 0 {
+		*title = strings.Join(fs.Args(), " ")
+	}
+	fields := captureFields{
+		Actor:    defaultActor(*actor),
+		Title:    *title,
+		Body:     *body,
+		BodyFile: *bodyFile,
+		Type:     *docType,
+		Authors:  splitCSV(*authors),
+		Tags:     splitCSV(*tags),
+	}
+	if fields.Title == "" {
+		return errors.New("title is required; use `cairn note --title \"...\"` or pass the title as arguments")
+	}
+	if err := validateCaptureType(fields.Type); err != nil {
+		return err
+	}
+	content := fields.Body
+	if fields.BodyFile != "" {
+		read, err := readBody(fields.BodyFile, stdin)
+		if err != nil {
+			return err
+		}
+		content = read
+	}
+	if strings.TrimSpace(content) == "" {
+		content = captureTemplate(fields.Type, fields.Title)
+	}
+	return captureFromFields(fields.withBody(content), opts, stdout)
+}
+
+func runInteractiveCapture(fields captureFields, opts options, stdin io.Reader, stdout io.Writer) error {
+	reader := bufio.NewReader(stdin)
+	fields.Actor = defaultActor(fields.Actor)
+	var err error
+	if fields.Actor == "" {
+		fields.Actor, err = promptLine(reader, stdout, "Actor")
+		if err != nil {
+			return err
+		}
+	}
+	if fields.Title == "" {
+		fields.Title, err = promptLine(reader, stdout, "Title")
+		if err != nil {
+			return err
+		}
+	}
+	if fields.Type == "" {
+		fields.Type, err = promptLineDefault(reader, stdout, "Type", "note")
+		if err != nil {
+			return err
+		}
+	}
+	if err := validateCaptureType(fields.Type); err != nil {
+		return err
+	}
+	content := fields.Body
+	if fields.BodyFile != "" {
+		read, err := readBody(fields.BodyFile, reader)
+		if err != nil {
+			return err
+		}
+		content = read
+	}
+	if strings.TrimSpace(content) == "" {
+		fmt.Fprintln(stdout, "Body: enter markdown, then a line with only `.` to finish.")
+		read, err := readPromptBody(reader)
+		if err != nil {
+			return err
+		}
+		content = read
+	}
+	if strings.TrimSpace(content) == "" {
+		content = captureTemplate(fields.Type, fields.Title)
+	}
+	return captureFromFields(fields.withBody(content), opts, stdout)
+}
+
+func (fields captureFields) withBody(body string) captureFields {
+	fields.Body = body
+	return fields
+}
+
+func captureFromFields(fields captureFields, opts options, stdout io.Writer) error {
+	result, err := document.Workspace{Root: opts.root}.Capture(document.CaptureOptions{
+		Actor:   fields.Actor,
+		Title:   fields.Title,
+		Body:    fields.Body,
+		Type:    fields.Type,
+		Authors: fields.Authors,
+		Tags:    fields.Tags,
+	})
+	if err != nil {
+		return err
+	}
+	printMutation(stdout, "Captured", result)
+	return nil
+}
+
+func defaultActor(explicit string) string {
+	if explicit != "" {
+		return explicit
+	}
+	for _, key := range []string{"CAIRN_ACTOR", "USER", "USERNAME"} {
+		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+			return slugifyActor(value)
+		}
+	}
+	return ""
+}
+
+func slugifyActor(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var builder strings.Builder
+	lastDash := false
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			builder.WriteRune(r)
+			lastDash = false
+			continue
+		}
+		if !lastDash {
+			builder.WriteRune('-')
+			lastDash = true
+		}
+	}
+	return strings.Trim(builder.String(), "-")
+}
+
+func validateCaptureType(docType string) error {
+	switch docType {
+	case "note", "investigation", "handoff", "decision", "runbook":
+		return nil
+	default:
+		return fmt.Errorf("unsupported note type %q; use note, investigation, handoff, decision, or runbook", docType)
+	}
+}
+
+func captureTemplate(docType string, title string) string {
+	switch docType {
+	case "investigation":
+		return fmt.Sprintf("# %s\n\n## Context\n\n## Findings\n\n## Next Steps\n", title)
+	case "handoff":
+		return fmt.Sprintf("# %s\n\n## Summary\n\n## Current State\n\n## Next Steps\n", title)
+	case "decision":
+		return fmt.Sprintf("# %s\n\n## Context\n\n## Decision\n\n## Consequences\n", title)
+	case "runbook":
+		return fmt.Sprintf("# %s\n\n## Purpose\n\n## Steps\n\n## Verification\n", title)
+	default:
+		return fmt.Sprintf("# %s\n\n", title)
+	}
+}
+
+func promptLine(reader *bufio.Reader, stdout io.Writer, label string) (string, error) {
+	fmt.Fprintf(stdout, "%s: ", label)
+	value, err := reader.ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", err
+	}
+	return strings.TrimSpace(value), nil
+}
+
+func promptLineDefault(reader *bufio.Reader, stdout io.Writer, label string, fallback string) (string, error) {
+	fmt.Fprintf(stdout, "%s [%s]: ", label, fallback)
+	value, err := reader.ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", err
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fallback, nil
+	}
+	return value, nil
+}
+
+func readPromptBody(reader *bufio.Reader) (string, error) {
+	var lines []string
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			return "", err
+		}
+		trimmed := strings.TrimRight(line, "\r\n")
+		if trimmed == "." {
+			return strings.Join(lines, "\n"), nil
+		}
+		if line != "" {
+			lines = append(lines, trimmed)
+		}
+		if errors.Is(err, io.EOF) {
+			return strings.Join(lines, "\n"), nil
+		}
+	}
 }
 
 func runPromote(args []string, opts options, stdout io.Writer) error {
@@ -771,7 +1004,7 @@ func newFlagSet(name string) *flag.FlagSet {
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: cairn [--root DIR] <command> [options]")
-	fmt.Fprintln(w, "commands: version, doctor, setup local-sync|azure-sync, init, capture, promote, archive, purge, validate, search, index status, sync status, mcp readonly|local-writes|remote-writes")
+	fmt.Fprintln(w, "commands: version, doctor, setup local-sync|azure-sync, init, note, capture, promote, archive, purge, validate, search, index status, sync status, mcp readonly|local-writes|remote-writes")
 }
 
 func runMCP(ctx context.Context, args []string, opts options, stdin io.Reader, stdout io.Writer) error {

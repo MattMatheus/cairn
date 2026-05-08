@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -32,7 +33,7 @@ func TestRunInitValidateAndSearch(t *testing.T) {
 	if !strings.Contains(stdout, "Captured agents/codex/searchable-note.md") {
 		t.Fatalf("unexpected capture stdout:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "Next: promote the document") {
+	if !strings.Contains(stdout, "Next: validate the workspace") || !strings.Contains(stdout, "Next: promote the document") || !strings.Contains(stdout, "Next: sync the workspace") {
 		t.Fatalf("capture should include next steps:\n%s", stdout)
 	}
 
@@ -187,6 +188,78 @@ func TestRunDoctorFullReportsValidationWarnings(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "- Remote reachability: warn (remote sync is not configured)") {
 		t.Fatalf("doctor --full should report unconfigured remote:\n%s", stdout)
+	}
+}
+
+func TestRunNoteCreatesTypedTemplateWithDefaultActor(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("CAIRN_ACTOR", "Pilot Dev")
+
+	stdout, stderr, code := run(t, "--root", root, "note", "--title", "Restart Worker", "--type", "runbook")
+	if code != 0 {
+		t.Fatalf("note code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Captured agents/pilot-dev/restart-worker.md") {
+		t.Fatalf("unexpected note stdout:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Next: validate the workspace") || !strings.Contains(stdout, "Next: promote the document") || !strings.Contains(stdout, "Next: sync the workspace") {
+		t.Fatalf("note should include validate/promote/sync next steps:\n%s", stdout)
+	}
+	content := readFile(t, root, "agents/pilot-dev/restart-worker.md")
+	for _, expected := range []string{"type: runbook", "actors:\n  - pilot-dev", "## Steps", "## Verification"} {
+		if !strings.Contains(content, expected) {
+			t.Fatalf("captured note missing %q:\n%s", expected, content)
+		}
+	}
+}
+
+func TestRunNoteSupportsCommonCaptureTypes(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("CAIRN_ACTOR", "pilot")
+	for _, docType := range []string{"note", "investigation", "handoff", "decision", "runbook"} {
+		title := "Type " + docType
+		stdout, stderr, code := run(t, "--root", root, "note", "--title", title, "--type", docType)
+		if code != 0 {
+			t.Fatalf("note type %s code=%d stderr=%s", docType, code, stderr)
+		}
+		if !strings.Contains(stdout, "Captured agents/pilot/type-"+docType+".md") {
+			t.Fatalf("unexpected stdout for type %s:\n%s", docType, stdout)
+		}
+		content := readFile(t, root, "agents/pilot/type-"+docType+".md")
+		if !strings.Contains(content, "type: "+docType) {
+			t.Fatalf("captured note missing type %s:\n%s", docType, content)
+		}
+	}
+}
+
+func TestRunCaptureInteractivePromptsForMissingFields(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("CAIRN_ACTOR", "")
+	t.Setenv("USER", "")
+	t.Setenv("USERNAME", "")
+	input := strings.Join([]string{
+		"pilot",
+		"Interactive Handoff",
+		"handoff",
+		"# Interactive Handoff",
+		"",
+		"Ready for review.",
+		".",
+		"",
+	}, "\n")
+	stdout, stderr, code := runWithInput(t, strings.NewReader(input), "--root", root, "capture", "--interactive")
+	if code != 0 {
+		t.Fatalf("capture --interactive code=%d stderr=%s stdout=%s", code, stderr, stdout)
+	}
+	if !strings.Contains(stdout, "Actor: ") || !strings.Contains(stdout, "Title: ") || !strings.Contains(stdout, "Type [note]: ") || !strings.Contains(stdout, "Body: enter markdown") {
+		t.Fatalf("interactive capture should prompt for missing fields:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Captured agents/pilot/interactive-handoff.md") {
+		t.Fatalf("unexpected stdout:\n%s", stdout)
+	}
+	content := readFile(t, root, "agents/pilot/interactive-handoff.md")
+	if !strings.Contains(content, "type: handoff") || !strings.Contains(content, "Ready for review.") {
+		t.Fatalf("interactive capture wrote unexpected content:\n%s", content)
 	}
 }
 
@@ -391,9 +464,14 @@ func runOK(t *testing.T, args ...string) string {
 
 func run(t *testing.T, args ...string) (string, string, int) {
 	t.Helper()
+	return runWithInput(t, strings.NewReader(""), args...)
+}
+
+func runWithInput(t *testing.T, stdin io.Reader, args ...string) (string, string, int) {
+	t.Helper()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	code := Run(context.Background(), args, strings.NewReader(""), &stdout, &stderr)
+	code := Run(context.Background(), args, stdin, &stdout, &stderr)
 	return stdout.String(), stderr.String(), code
 }
 
