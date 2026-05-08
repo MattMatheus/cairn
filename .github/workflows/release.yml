@@ -88,7 +88,30 @@ jobs:
             rm dist/cairn
           fi
           (cd dist && sha256sum cairn_${GOOS}_${GOARCH}.* > "cairn_${GOOS}_${GOARCH}.sha256")
-      - name: Upload release asset
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cairn-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs:
+      - version
+      - build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Verify release assets
+        run: |
+          find dist -maxdepth 1 -type f | sort
+          test "$(find dist -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' \) | wc -l)" -eq 6
+          test "$(find dist -maxdepth 1 -type f -name '*.sha256' | wc -l)" -eq 6
+      - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.version.outputs.tag }}
