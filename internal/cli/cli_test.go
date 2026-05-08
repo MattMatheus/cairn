@@ -131,6 +131,60 @@ func TestRunRepoAttachListAndDiscover(t *testing.T) {
 	}
 }
 
+func TestRunADOCaptureCreatesWorkingCandidate(t *testing.T) {
+	root := t.TempDir()
+	payloadPath := writeADOPayload(t, root)
+
+	stdout, stderr, code := run(t, "--root", root, "ado", "capture", "--event", "pr-completed", "--payload-file", payloadPath)
+	if code != 0 {
+		t.Fatalf("ado capture code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Captured candidate agents/ado/ado-pr-completed-add-checkout-retry.md") {
+		t.Fatalf("unexpected stdout:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Next: review the ADO candidate") {
+		t.Fatalf("stdout missing review next step:\n%s", stdout)
+	}
+	content := readFile(t, root, "agents/ado/ado-pr-completed-add-checkout-retry.md")
+	for _, expected := range []string{
+		"type: handoff",
+		"status: working",
+		"tags:\n  - ado\n  - candidate\n  - payments-api",
+		"Pull request: 42",
+		"Repository: payments-api",
+		"Review this candidate and promote it only if it should become durable pod knowledge.",
+	} {
+		if !strings.Contains(content, expected) {
+			t.Fatalf("ADO capture missing %q:\n%s", expected, content)
+		}
+	}
+}
+
+func TestRunADOCaptureCanPromoteOnlyToProposed(t *testing.T) {
+	root := t.TempDir()
+	payloadPath := writeADOPayload(t, root)
+
+	stdout, stderr, code := run(t, "--root", root, "ado", "capture", "--event", "pr-completed", "--payload-file", payloadPath, "--status", "proposed")
+	if code != 0 {
+		t.Fatalf("ado capture proposed code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Captured candidate and promoted handoffs/ado-pr-completed-add-checkout-retry.md") {
+		t.Fatalf("unexpected stdout:\n%s", stdout)
+	}
+	content := readFile(t, root, "handoffs/ado-pr-completed-add-checkout-retry.md")
+	if !strings.Contains(content, "status: proposed") {
+		t.Fatalf("expected proposed candidate:\n%s", content)
+	}
+
+	_, stderr, code = run(t, "--root", root, "ado", "capture", "--event", "pr-completed", "--payload-file", payloadPath, "--status", "canonical")
+	if code == 0 {
+		t.Fatalf("expected canonical ADO capture to fail")
+	}
+	if !strings.Contains(stderr, "supports only working or proposed") {
+		t.Fatalf("unexpected stderr:\n%s", stderr)
+	}
+}
+
 func TestRunVersionAndDoctor(t *testing.T) {
 	root := t.TempDir()
 
@@ -521,4 +575,24 @@ func readFile(t *testing.T, root string, rel string) string {
 		t.Fatalf("ReadFile(%s) error = %v", rel, err)
 	}
 	return string(content)
+}
+
+func writeADOPayload(t *testing.T, root string) string {
+	t.Helper()
+	path := filepath.Join(root, "ado-pr.json")
+	if err := os.WriteFile(path, []byte(`{
+	  "resource": {
+	    "pullRequestId": 42,
+	    "title": "Add checkout retry",
+	    "description": "Retries transient checkout failures.",
+	    "sourceRefName": "refs/heads/feature/retry",
+	    "targetRefName": "refs/heads/main",
+	    "url": "https://dev.azure.com/org/project/_git/payments/pullrequest/42",
+	    "repository": {"name": "payments-api"},
+	    "closedBy": {"displayName": "Ada Lovelace"}
+	  }
+	}`), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	return path
 }

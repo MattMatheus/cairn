@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"cairn/internal/ado"
 	"cairn/internal/document"
 	"cairn/internal/localindex"
 	"cairn/internal/mcpops"
@@ -38,6 +39,8 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, 
 
 	var runErr error
 	switch rest[0] {
+	case "ado":
+		runErr = runADO(rest[1:], opts, stdin, stdout)
 	case "setup":
 		runErr = runSetup(rest[1:], opts, stdout)
 	case "repo":
@@ -80,6 +83,74 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, 
 		return 1
 	}
 	return 0
+}
+
+func runADO(args []string, opts options, stdin io.Reader, stdout io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: cairn ado capture --event pr-completed --payload-file FILE [--actor ado] [--type handoff] [--status working|proposed]")
+	}
+	switch args[0] {
+	case "capture":
+		return runADOCapture(args[1:], opts, stdin, stdout)
+	default:
+		return fmt.Errorf("usage: cairn ado capture --event pr-completed --payload-file FILE [--actor ado] [--type handoff] [--status working|proposed]")
+	}
+}
+
+func runADOCapture(args []string, opts options, stdin io.Reader, stdout io.Writer) error {
+	fs := newFlagSet("ado capture")
+	event := fs.String("event", "", "ADO lifecycle event")
+	payloadFile := fs.String("payload-file", "", "ADO payload JSON file, or - for stdin")
+	actor := fs.String("actor", "ado", "capture actor")
+	docType := fs.String("type", "handoff", "candidate document type")
+	status := fs.String("status", "working", "candidate status: working or proposed")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return fmt.Errorf("usage: cairn ado capture --event pr-completed --payload-file FILE [--actor ado] [--type handoff] [--status working|proposed]")
+	}
+	if *payloadFile == "" {
+		return errors.New("ado capture requires --payload-file")
+	}
+	if *status != "working" && *status != "proposed" {
+		return fmt.Errorf("ado capture supports only working or proposed status, got %q", *status)
+	}
+	payload, err := readBody(*payloadFile, stdin)
+	if err != nil {
+		return err
+	}
+	candidate, err := ado.BuildCandidate(*event, []byte(payload))
+	if err != nil {
+		return err
+	}
+	captured, err := document.Workspace{Root: opts.root}.Capture(document.CaptureOptions{
+		Actor: *actor,
+		Title: candidate.Title,
+		Body:  candidate.Body,
+		Type:  *docType,
+		Tags:  candidate.Tags,
+	})
+	if err != nil {
+		return err
+	}
+	result := captured
+	if *status == "proposed" {
+		promoted, err := document.Workspace{Root: opts.root}.Promote(document.PromoteOptions{
+			Path:   captured.Path,
+			Type:   *docType,
+			Status: "proposed",
+		})
+		if err != nil {
+			return err
+		}
+		result = promoted
+		printMutation(stdout, "Captured candidate and promoted", result)
+	} else {
+		printMutation(stdout, "Captured candidate", result)
+	}
+	fmt.Fprintln(stdout, "Next: review the ADO candidate and promote only if it should become durable pod knowledge.")
+	return nil
 }
 
 func runRepo(args []string, opts options, stdout io.Writer) error {
@@ -1081,7 +1152,7 @@ func newFlagSet(name string) *flag.FlagSet {
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: cairn [--root DIR] <command> [options]")
-	fmt.Fprintln(w, "commands: version, doctor, setup local-sync|azure-sync, init, repo attach|list|discover, note, capture, promote, archive, purge, validate, search, index status, sync status, mcp readonly|local-writes|remote-writes")
+	fmt.Fprintln(w, "commands: version, doctor, setup local-sync|azure-sync, init, repo attach|list|discover, ado capture, note, capture, promote, archive, purge, validate, search, index status, sync status, mcp readonly|local-writes|remote-writes")
 }
 
 func runMCP(ctx context.Context, args []string, opts options, stdin io.Reader, stdout io.Writer) error {
