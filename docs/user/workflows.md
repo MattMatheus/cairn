@@ -1,5 +1,29 @@
 # Cairn Daily Workflows
 
+## Human Capture Loop
+
+Use the short path when you want a quick note without remembering frontmatter or the full capture command:
+
+```sh
+cairn note --title "Thing Learned" --type note
+```
+
+For guided terminal capture:
+
+```sh
+cairn capture --interactive
+```
+
+Then validate, promote, and sync as usual:
+
+```sh
+cairn validate
+cairn promote agents/<actor>/thing-learned.md --type note
+cairn sync dry-run
+```
+
+`<actor>` is the actor printed by the capture command, for example `agents/pilot-dev/...`.
+
 ## Agent Capture Loop
 
 1. Capture rough work:
@@ -73,10 +97,55 @@ Ignored paths are skipped by validation, indexing/search, and sync manifests.
 ## Healthy Workspace Checklist
 
 - `cairn validate` has no errors.
+- `cairn doctor --full` reports no unexpected warnings.
 - `cairn index refresh` completes locally.
 - `cairn search "known term"` finds expected documents.
 - `cairn sync dry-run` is clean or shows expected pull/push changes.
 - `AGENTS.md` and `CLAUDE.md` stay short and point agents to onboarding docs.
+
+## Multi-Repo Pod Workflow
+
+Keep one Cairn workspace per pod, then attach code repos as references:
+
+```sh
+cairn --root ./cairn-kb repo attach --name service-api --path ../service-api
+cairn --root ./cairn-kb repo list
+cairn repo discover --from ./service-api
+```
+
+Attached repos are reference metadata only. Cairn does not clone, index, sync, or validate repo contents.
+
+## ADO Candidate Workflow
+
+Capture candidate knowledge from an Azure DevOps PR completion payload:
+
+```sh
+cairn ado capture --event pr-completed --payload-file ado-pr.json
+```
+
+This creates working candidate knowledge. To place it in review staging:
+
+```sh
+cairn ado capture --event pr-completed --payload-file ado-pr.json --status proposed
+```
+
+`canonical` is rejected; humans still decide what becomes durable pod knowledge.
+
+## Health Report Workflow
+
+Print a local health report:
+
+```sh
+cairn health report
+```
+
+Write one for review:
+
+```sh
+cairn health report --output .cairn/generated/health.md
+```
+
+The report is descriptive and local-only. It is not a dashboard, score, telemetry feed, or cross-pod view.
 
 ## Local Sync Checklist
 

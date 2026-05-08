@@ -22,11 +22,13 @@ mkdir -p "$WORK_ROOT"
 cd "$WORK_ROOT"
 cairn init
 cairn doctor
+cairn doctor --full
 cairn validate
 ```
 
 `init` creates the standard folders, `.cairn/config.yaml`, `.cairnignore`, starter schemas, onboarding docs, and terse `AGENTS.md` / `CLAUDE.md` pointers. Existing files are preserved.
 If you accidentally run `cairn init` in the Cairn source repository, Cairn refuses unless `--force` is provided.
+Use `doctor --full` for a fuller pilot readiness summary across validation, index/search, sync, remote configuration, and MCP tool surfaces.
 
 For a local no-service sync pilot, use the setup helper instead of editing config by hand:
 
@@ -37,6 +39,24 @@ cairn setup local-sync --remote-root /tmp/cairn-local-remote
 This runs workspace initialization if needed and writes `remote_sync.provider: local_fs` to `.cairn/config.yaml`.
 
 ## Capture A Note
+
+For a short human-friendly capture path:
+
+```sh
+cairn note --title "Auth Timeout Investigation" --type investigation --body "Initial notes about the timeout."
+```
+
+`note` uses `CAIRN_ACTOR`, `USER`, or `USERNAME` as the actor when `--actor` is not supplied.
+
+For prompt-driven capture:
+
+```sh
+cairn capture --interactive
+```
+
+End the interactive body with a line containing only `.`.
+
+For explicit agent or automation capture:
 
 ```sh
 cairn capture \
@@ -134,3 +154,13 @@ cairn mcp remote-writes
 - `remote-writes`: sync pull, sync push, and index refresh.
 
 Hard delete/purge is never exposed through MCP.
+
+## Pilot Helpers
+
+See [Pilot Helpers](pilot-helpers.md) for:
+
+- one-command readiness checks with `cairn doctor --full`
+- repo attachment and `.cairn-workspace` discovery
+- ADO PR completion candidate capture
+- the VS Code command-palette helper
+- local markdown health reports with `cairn health report`
