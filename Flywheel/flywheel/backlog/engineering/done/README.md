@@ -4,6 +4,7 @@ Engineering work accepted by QA.
 
 ## Recently Accepted
 
+- `STORY-20260508-knowledge-health-report`
 - `STORY-20260508-vscode-workspace-helpers`
 - `STORY-20260508-ado-lifecycle-candidate-capture`
 - `STORY-20260508-repo-attachment-discovery`

@@ -49,6 +49,8 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, 
 		runErr = runVersion(rest[1:], stdout)
 	case "doctor":
 		runErr = runDoctor(ctx, rest[1:], opts, stdout)
+	case "health":
+		runErr = runHealth(ctx, rest[1:], opts, stdout)
 	case "init":
 		runErr = runInit(rest[1:], opts, stdout)
 	case "note":
@@ -83,6 +85,58 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, 
 		return 1
 	}
 	return 0
+}
+
+func runHealth(ctx context.Context, args []string, opts options, stdout io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: cairn health report [--output PATH]")
+	}
+	switch args[0] {
+	case "report":
+		fs := newFlagSet("health report")
+		outputPath := fs.String("output", "", "workspace-relative path to write the markdown report")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if fs.NArg() != 0 {
+			return fmt.Errorf("usage: cairn health report [--output PATH]")
+		}
+		report, err := workspace.BuildHealthReport(ctx, opts.root, workspace.HealthOptions{})
+		if err != nil {
+			return err
+		}
+		rendered := workspace.RenderHealthReport(report)
+		if *outputPath == "" {
+			fmt.Fprint(stdout, rendered)
+			return nil
+		}
+		rel, err := cleanOutputPath(*outputPath)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(opts.root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(target, []byte(rendered), 0o644); err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "Wrote health report %s\n", filepath.ToSlash(rel))
+		return nil
+	default:
+		return fmt.Errorf("usage: cairn health report [--output PATH]")
+	}
+}
+
+func cleanOutputPath(path string) (string, error) {
+	if filepath.IsAbs(path) {
+		return "", fmt.Errorf("output path must be relative: %s", path)
+	}
+	clean := filepath.ToSlash(filepath.Clean(path))
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
+		return "", fmt.Errorf("output path escapes workspace: %s", path)
+	}
+	return clean, nil
 }
 
 func runADO(args []string, opts options, stdin io.Reader, stdout io.Writer) error {
@@ -1152,7 +1206,7 @@ func newFlagSet(name string) *flag.FlagSet {
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: cairn [--root DIR] <command> [options]")
-	fmt.Fprintln(w, "commands: version, doctor, setup local-sync|azure-sync, init, repo attach|list|discover, ado capture, note, capture, promote, archive, purge, validate, search, index status, sync status, mcp readonly|local-writes|remote-writes")
+	fmt.Fprintln(w, "commands: version, doctor, health report, setup local-sync|azure-sync, init, repo attach|list|discover, ado capture, note, capture, promote, archive, purge, validate, search, index status, sync status, mcp readonly|local-writes|remote-writes")
 }
 
 func runMCP(ctx context.Context, args []string, opts options, stdin io.Reader, stdout io.Writer) error {

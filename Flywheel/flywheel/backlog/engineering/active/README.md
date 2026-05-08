@@ -8,7 +8,7 @@ No active engineering stories.
 
 ## Next Ready Candidates
 
-1. `../intake/STORY-20260508-knowledge-health-report.md`
+No ready candidates outside the active sequence.
 
 ## Batch Goal
 
@@ -27,4 +27,6 @@ Polish Cairn for internal pilot rollout by reducing first-run friction, supporti
 - `STORY-20260508-ado-lifecycle-candidate-capture` moved to QA on 2026-05-08.
 - PM activated `STORY-20260508-vscode-workspace-helpers` on 2026-05-08.
 - `STORY-20260508-vscode-workspace-helpers` moved to QA on 2026-05-08.
+- PM activated `STORY-20260508-knowledge-health-report` on 2026-05-08.
+- `STORY-20260508-knowledge-health-report` moved to QA on 2026-05-08.
 - Follow-on intake order is interactive capture, repo attachment/discovery, ADO lifecycle candidate capture, VS Code helpers, and knowledge health reporting.

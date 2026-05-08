@@ -185,6 +185,47 @@ func TestRunADOCaptureCanPromoteOnlyToProposed(t *testing.T) {
 	}
 }
 
+func TestRunHealthReportPrintsAndWritesMarkdown(t *testing.T) {
+	root := t.TempDir()
+	runOK(t, "--root", root, "init", "--workspace-id", "cairn:workspace:health")
+	runOK(t, "--root", root, "note", "--actor", "tester", "--title", "Health Candidate", "--type", "runbook")
+	runOK(t, "--root", root, "promote", "agents/tester/health-candidate.md", "--type", "runbook")
+	if err := os.WriteFile(filepath.Join(root, "runbooks", "manual.md"), []byte("# Manual\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	stdout, stderr, code := run(t, "--root", root, "health", "report")
+	if code != 0 {
+		t.Fatalf("health report code=%d stderr=%s", code, stderr)
+	}
+	for _, expected := range []string{
+		"# Cairn Knowledge Health",
+		"Workspace: cairn:workspace:health",
+		"## Documents By Status",
+		"## Proposed Documents Awaiting Review",
+		"Health Candidate (`runbooks/health-candidate.md`)",
+		"## Validation Findings",
+		"runbooks/manual.md",
+		"## Index And Sync",
+	} {
+		if !strings.Contains(stdout, expected) {
+			t.Fatalf("health report missing %q:\n%s", expected, stdout)
+		}
+	}
+
+	stdout, stderr, code = run(t, "--root", root, "health", "report", "--output", ".cairn/generated/health.md")
+	if code != 0 {
+		t.Fatalf("health report output code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Wrote health report .cairn/generated/health.md") {
+		t.Fatalf("unexpected output stdout:\n%s", stdout)
+	}
+	written := readFile(t, root, ".cairn/generated/health.md")
+	if !strings.Contains(written, "# Cairn Knowledge Health") {
+		t.Fatalf("written health report missing heading:\n%s", written)
+	}
+}
+
 func TestRunVersionAndDoctor(t *testing.T) {
 	root := t.TempDir()
 
