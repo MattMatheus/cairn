@@ -57,20 +57,20 @@ trap 'rm -rf "$tmp_dir"' EXIT
 mkdir -p "$install_dir"
 echo "Downloading $url"
 curl -fsSL "$url" -o "$tmp_dir/$asset"
-if curl -fsSL "$checksum_url" -o "$tmp_dir/$asset.sha256"; then
-  if command -v sha256sum >/dev/null 2>&1; then
-    (cd "$tmp_dir" && sha256sum -c "$asset.sha256")
-  else
-    expected="$(awk '{print $1}' "$tmp_dir/$asset.sha256")"
-    actual="$(shasum -a 256 "$tmp_dir/$asset" | awk '{print $1}')"
-    if [ "$actual" != "$expected" ]; then
-      echo "checksum mismatch for $asset" >&2
-      exit 1
-    fi
-    echo "$asset: OK"
-  fi
+if ! curl -fsSL "$checksum_url" -o "$tmp_dir/$asset.sha256"; then
+  echo "failed to download checksum from $checksum_url; refusing to install unverified binary" >&2
+  exit 1
+fi
+if command -v sha256sum >/dev/null 2>&1; then
+  (cd "$tmp_dir" && sha256sum -c "$asset.sha256")
 else
-  echo "Warning: checksum unavailable for $asset" >&2
+  expected="$(awk '{print $1}' "$tmp_dir/$asset.sha256")"
+  actual="$(shasum -a 256 "$tmp_dir/$asset" | awk '{print $1}')"
+  if [ "$actual" != "$expected" ]; then
+    echo "checksum mismatch for $asset" >&2
+    exit 1
+  fi
+  echo "$asset: OK"
 fi
 tar -xzf "$tmp_dir/$asset" -C "$tmp_dir"
 install "$tmp_dir/cairn" "$install_dir/cairn"
